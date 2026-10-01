@@ -46,7 +46,7 @@
       "policy": "appVersion"
     },
     "extra": {
-      "apiUrl": "http://10.0.2.2:8787"
+      "apiUrl": "https://household-api.matthew-davenport30.workers.dev"
     }
   }
 }
