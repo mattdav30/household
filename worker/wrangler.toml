@@ -1,0 +1,16 @@
+name = "household-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+TZ_OFFSET_MIN = "600"
+
+# 7:00am Brisbane = 21:00 UTC the day before
+[triggers]
+crons = ["0 21 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "household"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"

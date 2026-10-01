@@ -1,0 +1,26 @@
+name: Send app update
+
+# Pushes screen and logic changes to both phones over the air.
+# The phones download the update in the background and apply it on next launch.
+on:
+  push:
+    branches: [main]
+    paths: ['app/src/**', 'app/assets/**']
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Publish update
+        run: npx eas-cli@latest update --channel production --message "${{ github.event.head_commit.message || 'Manual update' }}" --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
