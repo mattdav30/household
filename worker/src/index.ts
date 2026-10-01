@@ -3,6 +3,8 @@ import { cors } from 'hono/cors';
 import {
   uid, inviteCode, hashPassword, safeEqual, now, localDate, addDays, advance, guessAisle, sendPush, PushMsg,
 } from './lib';
+import { expandEvents } from './recur';
+import { fromMealDb, importFromUrl, mealDb, normIngredients, sameThing, type Ingredient } from './food';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string };
 type User = { id: string; household_id: string; email: string; name: string; color: string };
@@ -16,16 +18,17 @@ const tz = (env: Env) => Number(env.TZ_OFFSET_MIN ?? 600);
 
 // Columns each table accepts from the app. Anything else is ignored.
 const TABLES: Record<string, string[]> = {
-  shopping_items: ['name', 'qty', 'aisle', 'checked'],
-  recipes: ['title', 'ingredients', 'url', 'notes'],
+  shopping_items: ['name', 'qty', 'aisle', 'checked', 'note'],
+  recipes: ['title', 'ingredients', 'url', 'notes', 'image_url', 'instructions', 'servings', 'source', 'source_id'],
+  pantry_items: ['name', 'qty', 'location'],
   meals: ['date', 'slot', 'title', 'recipe_id', 'notes'],
   chores: ['title', 'assignee_id', 'due_date', 'repeat', 'done_at', 'notes'],
-  events: ['title', 'date', 'start_time', 'end_time', 'who', 'location', 'notes'],
+  events: ['title', 'date', 'start_time', 'end_time', 'who', 'location', 'notes', 'color', 'repeat', 'repeat_until', 'exdates'],
   bills: ['name', 'amount_cents', 'due_date', 'repeat', 'last_paid_at', 'notes'],
   wishes: ['list', 'title', 'url', 'price_cents', 'for_whom', 'status', 'notes'],
 };
 const REQUIRED: Record<string, string[]> = {
-  shopping_items: ['name'], recipes: ['title'], meals: ['date', 'title'], chores: ['title'],
+  shopping_items: ['name'], recipes: ['title'], pantry_items: ['name'], meals: ['date', 'title'], chores: ['title'],
   events: ['title', 'date'], bills: ['name', 'due_date'], wishes: ['title'],
 };
 
@@ -51,6 +54,15 @@ async function profile(db: D1Database, userId: string) {
 }
 
 app.get('/', (c) => c.json({ ok: true, app: 'household' }));
+
+// Public check that the online recipe library is reachable. Returns counts only.
+app.get('/health/recipes', async (c) => {
+  try {
+    const cats = await mealDb('/categories.php', c.executionCtx);
+    const hits = await mealDb('/search.php?s=chicken', c.executionCtx);
+    return c.json({ ok: true, categories: cats.categories?.length ?? 0, chicken: hits.meals?.length ?? 0, sample: hits.meals?.[0] ? fromMealDb(hits.meals[0]).ingredients.slice(0, 3) : null });
+  } catch (e) { return c.json({ ok: false, error: (e as Error).message }, 502); }
+});
 
 app.post('/auth/register', async (c) => {
   const b = await c.req.json<{ email?: string; name?: string; password?: string; invite_code?: string; household_name?: string }>();
@@ -153,31 +165,176 @@ const describe: Record<string, (row: Record<string, unknown>) => [string, string
   bills: (r) => ['Bills', `added ${r.name}, due ${r.due_date}`],
   wishes: (r) => ['Lists', `added ${r.title}`],
   meals: (r) => ['Meals', `planned ${r.title} for ${r.date}`],
+  pantry_items: () => null,
   recipes: () => null,
 };
 
 // ---------- Special actions ----------
+
+// Repeating events are stored once and expanded into dates on the way out.
+async function eventsBetween(db: D1Database, householdId: string, from: string, to: string) {
+  const rows = (await db.prepare(
+    `SELECT * FROM events WHERE household_id = ? AND date <= ?
+     AND ((repeat = 'none' AND date >= ?) OR (repeat != 'none' AND (repeat_until IS NULL OR repeat_until >= ?)))`,
+  ).bind(householdId, to, from, from).all<Record<string, any>>()).results;
+  return expandEvents(rows as any[], from, to);
+}
 
 app.get('/api/today', async (c) => {
   const u = c.get('user');
   const today = localDate(tz(c.env));
   const week = addDays(today, 7);
   const db = c.env.DB;
-  const [events, meals, chores, bills, shopping] = await db.batch([
-    db.prepare('SELECT * FROM events WHERE household_id = ? AND date BETWEEN ? AND ? ORDER BY date, start_time').bind(u.household_id, today, addDays(today, 2)),
-    db.prepare('SELECT * FROM meals WHERE household_id = ? AND date = ? ORDER BY slot').bind(u.household_id, today),
+  const [meals, chores, bills, shopping, pantry] = await db.batch([
+    db.prepare('SELECT m.*, r.image_url FROM meals m LEFT JOIN recipes r ON r.id = m.recipe_id WHERE m.household_id = ? AND m.date = ? ORDER BY m.slot').bind(u.household_id, today),
     db.prepare('SELECT * FROM chores WHERE household_id = ? AND done_at IS NULL AND due_date IS NOT NULL AND due_date <= ? ORDER BY due_date').bind(u.household_id, today),
     db.prepare('SELECT * FROM bills WHERE household_id = ? AND due_date <= ? ORDER BY due_date').bind(u.household_id, week),
     db.prepare('SELECT COUNT(*) AS n FROM shopping_items WHERE household_id = ? AND checked = 0').bind(u.household_id),
+    db.prepare('SELECT COUNT(*) AS n FROM pantry_items WHERE household_id = ?').bind(u.household_id),
   ]);
   return c.json({
     today,
-    events: events.results,
+    events: await eventsBetween(db, u.household_id, today, addDays(today, 2)),
     meals: meals.results,
     chores: chores.results,
     bills: bills.results,
     shopping_open: (shopping.results[0] as { n: number }).n,
+    pantry_count: (pantry.results[0] as { n: number }).n,
   });
+});
+
+app.get('/api/events', async (c) => {
+  const from = c.req.query('from') ?? localDate(tz(c.env));
+  const to = c.req.query('to') ?? addDays(from, 42);
+  return c.json(await eventsBetween(c.env.DB, c.get('user').household_id, from, to));
+});
+
+// Remove one date from a repeating event, leaving the rest of the series.
+app.post('/api/events/:id/skip', async (c) => {
+  const u = c.get('user');
+  const { date } = await c.req.json<{ date?: string }>();
+  const ev = await c.env.DB.prepare('SELECT exdates FROM events WHERE id = ? AND household_id = ?')
+    .bind(c.req.param('id'), u.household_id).first<{ exdates: string }>();
+  if (!ev || !date) return bad('Not found.', 404);
+  let ex: string[] = [];
+  try { ex = JSON.parse(ev.exdates || '[]'); } catch { ex = []; }
+  if (!ex.includes(date)) ex.push(date);
+  await c.env.DB.prepare('UPDATE events SET exdates = ?, updated_at = ? WHERE id = ?').bind(JSON.stringify(ex), now(), c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ---------- Online recipes ----------
+
+app.get('/api/discover/categories', async (c) => {
+  const data = await mealDb('/categories.php', c.executionCtx);
+  return c.json((data.categories ?? []).map((x: any) => ({ name: x.strCategory, image_url: x.strCategoryThumb })));
+});
+
+app.get('/api/discover/search', async (c) => {
+  const q = (c.req.query('q') ?? '').trim();
+  const cat = (c.req.query('c') ?? '').trim();
+  try {
+    if (cat) {
+      const data = await mealDb('/filter.php?c=' + encodeURIComponent(cat), c.executionCtx);
+      return c.json((data.meals ?? []).map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: cat })));
+    }
+    if (!q) {
+      // A mixed starter shelf: a few random picks.
+      const picks = await Promise.all(Array.from({ length: 8 }, () => fetch('https://www.themealdb.com/api/json/v1/1/random.php').then((r) => r.json() as Promise<any>).catch(() => null)));
+      const seen = new Set<string>();
+      return c.json(picks.flatMap((p) => p?.meals ?? []).filter((m: any) => !seen.has(m.idMeal) && seen.add(m.idMeal))
+        .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory })));
+    }
+    // Search by name, then by main ingredient, and merge.
+    const [byName, byIng] = await Promise.all([
+      mealDb('/search.php?s=' + encodeURIComponent(q), c.executionCtx),
+      mealDb('/filter.php?i=' + encodeURIComponent(q.replace(/\s+/g, '_')), c.executionCtx).catch(() => ({ meals: null })),
+    ]);
+    const seen = new Set<string>();
+    const out = [...(byName.meals ?? []), ...(byIng.meals ?? [])].filter((m: any) => !seen.has(m.idMeal) && seen.add(m.idMeal))
+      .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory ?? null }));
+    return c.json(out);
+  } catch (e) {
+    return bad((e as Error).message, 502);
+  }
+});
+
+app.get('/api/discover/meal/:id', async (c) => {
+  const id = c.req.param('id').replace(/^mealdb:/, '');
+  const data = await mealDb('/lookup.php?i=' + encodeURIComponent(id), c.executionCtx);
+  const m = data.meals?.[0];
+  if (!m) return bad('Recipe not found.', 404);
+  return c.json(fromMealDb(m));
+});
+
+app.post('/api/discover/import', async (c) => {
+  const { url } = await c.req.json<{ url?: string }>();
+  if (!url || !/^https?:\/\//i.test(url.trim())) return bad('Paste a full link starting with https://');
+  try {
+    return c.json(await importFromUrl(url.trim()));
+  } catch (e) {
+    return bad((e as Error).message, 422);
+  }
+});
+
+// ---------- Have, on the list, or need ----------
+
+app.post('/api/ingredients/check', async (c) => {
+  const u = c.get('user');
+  const body = await c.req.json<{ items?: unknown }>();
+  const items = normIngredients(body.items ?? []);
+  const [pantry, listed] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT name, qty, location FROM pantry_items WHERE household_id = ?').bind(u.household_id),
+    c.env.DB.prepare('SELECT name, qty FROM shopping_items WHERE household_id = ? AND checked = 0').bind(u.household_id),
+  ]);
+  return c.json(items.map((i) => {
+    const have = (pantry.results as { name: string; location: string }[]).find((p) => sameThing(p.name, i.name));
+    if (have) return { ...i, status: 'have', match: have.name, location: have.location };
+    const onList = (listed.results as { name: string }[]).find((p) => sameThing(p.name, i.name));
+    if (onList) return { ...i, status: 'listed', match: onList.name };
+    return { ...i, status: 'need' };
+  }));
+});
+
+app.post('/api/shopping_items/bulk', async (c) => {
+  const u = c.get('user');
+  const body = await c.req.json<{ items?: (Ingredient & { note?: string })[] }>();
+  const items = (body.items ?? []).filter((i) => i?.name?.trim());
+  const open = (await c.env.DB.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0')
+    .bind(u.household_id).all<{ name: string }>()).results;
+  const fresh = items.filter((i) => !open.some((o) => sameThing(o.name, i.name)));
+  if (fresh.length) {
+    await c.env.DB.batch(fresh.map((i) => c.env.DB.prepare(
+      'INSERT INTO shopping_items (id, household_id, name, qty, aisle, checked, added_by, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
+    ).bind(uid('i_'), u.household_id, i.name.trim(), i.qty ?? null, guessAisle(i.name), u.id, i.note ?? null, now(), now())));
+    c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} added ${fresh.length} item${fresh.length > 1 ? 's' : ''}`, { table: 'shopping_items' }));
+  }
+  return c.json({ added: fresh.length, skipped: items.length - fresh.length });
+});
+
+// ---------- At home ----------
+
+const HOME_FOR_AISLE: Record<string, string> = {
+  Produce: 'Fridge', 'Meat & Seafood': 'Fridge', 'Dairy & Eggs': 'Fridge', Frozen: 'Freezer', Household: 'Household',
+};
+
+app.post('/api/pantry_items/:id/used-up', async (c) => {
+  const u = c.get('user');
+  const { add_to_list } = await c.req.json<{ add_to_list?: boolean }>().catch(() => ({ add_to_list: false }));
+  const item = await c.env.DB.prepare('SELECT * FROM pantry_items WHERE id = ? AND household_id = ?')
+    .bind(c.req.param('id'), u.household_id).first<{ name: string }>();
+  if (!item) return bad('Not found.', 404);
+  const stmts = [c.env.DB.prepare('DELETE FROM pantry_items WHERE id = ?').bind(c.req.param('id'))];
+  if (add_to_list) {
+    const open = (await c.env.DB.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0').bind(u.household_id).all<{ name: string }>()).results;
+    if (!open.some((o) => sameThing(o.name, item.name))) {
+      stmts.push(c.env.DB.prepare('INSERT INTO shopping_items (id, household_id, name, aisle, checked, added_by, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?)')
+        .bind(uid('i_'), u.household_id, item.name, guessAisle(item.name), u.id, now(), now()));
+      c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} ran out of ${item.name}`, { table: 'shopping_items' }));
+    }
+  }
+  await c.env.DB.batch(stmts);
+  return c.json({ ok: true });
 });
 
 app.post('/api/chores/:id/complete', async (c) => {
@@ -215,29 +372,50 @@ app.post('/api/bills/:id/paid', async (c) => {
   return c.json(await c.env.DB.prepare('SELECT * FROM bills WHERE id = ?').bind(bill.id).first());
 });
 
-// Add a recipe's ingredients to the shopping list, skipping items already on the list.
+// Add a recipe's ingredients to the shopping list, skipping what we have or have listed already.
 app.post('/api/recipes/:id/to-shopping', async (c) => {
   const u = c.get('user');
   const recipe = await c.env.DB.prepare('SELECT * FROM recipes WHERE id = ? AND household_id = ?')
     .bind(c.req.param('id'), u.household_id).first<{ ingredients: string; title: string }>();
   if (!recipe) return bad('Not found.', 404);
-  let items: string[] = [];
-  try { items = JSON.parse(recipe.ingredients); } catch { items = []; }
-  const open = new Set(((await c.env.DB.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0')
-    .bind(u.household_id).all<{ name: string }>()).results).map((r) => r.name.toLowerCase()));
-  const fresh = items.map((s) => s.trim()).filter((s) => s && !open.has(s.toLowerCase()));
+  const items = normIngredients(recipe.ingredients);
+  const [pantry, open] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT name FROM pantry_items WHERE household_id = ?').bind(u.household_id),
+    c.env.DB.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0').bind(u.household_id),
+  ]);
+  const known = [...pantry.results, ...open.results] as { name: string }[];
+  const fresh = items.filter((i) => !known.some((k) => sameThing(k.name, i.name)));
   if (fresh.length) {
-    await c.env.DB.batch(fresh.map((name) => c.env.DB.prepare(
-      'INSERT INTO shopping_items (id, household_id, name, aisle, checked, added_by, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?)',
-    ).bind(uid('i_'), u.household_id, name, guessAisle(name), u.id, now(), now())));
-    c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} added ${fresh.length} items for ${recipe.title}`));
+    await c.env.DB.batch(fresh.map((i) => c.env.DB.prepare(
+      'INSERT INTO shopping_items (id, household_id, name, qty, aisle, checked, added_by, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
+    ).bind(uid('i_'), u.household_id, i.name, i.qty, guessAisle(i.name), u.id, recipe.title, now(), now())));
+    c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} added ${fresh.length} items for ${recipe.title}`, { table: 'shopping_items' }));
   }
   return c.json({ added: fresh.length });
 });
 
+// Done shopping: ticked items leave the list and go into At home.
 app.post('/api/shopping_items/clear-checked', async (c) => {
-  const r = await c.env.DB.prepare('DELETE FROM shopping_items WHERE household_id = ? AND checked = 1').bind(c.get('user').household_id).run();
-  return c.json({ deleted: r.meta.changes });
+  const u = c.get('user');
+  const db = c.env.DB;
+  const [ticked, pantry] = await db.batch([
+    db.prepare('SELECT * FROM shopping_items WHERE household_id = ? AND checked = 1').bind(u.household_id),
+    db.prepare('SELECT id, name FROM pantry_items WHERE household_id = ?').bind(u.household_id),
+  ]);
+  const stmts: D1PreparedStatement[] = [db.prepare('DELETE FROM shopping_items WHERE household_id = ? AND checked = 1').bind(u.household_id)];
+  let moved = 0;
+  for (const it of ticked.results as { name: string; qty: string | null; aisle: string }[]) {
+    const existing = (pantry.results as { id: string; name: string }[]).find((p) => sameThing(p.name, it.name));
+    if (existing) {
+      stmts.push(db.prepare('UPDATE pantry_items SET qty = COALESCE(?, qty), updated_at = ? WHERE id = ?').bind(it.qty, now(), existing.id));
+    } else {
+      stmts.push(db.prepare('INSERT INTO pantry_items (id, household_id, name, qty, location, added_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(uid('p_'), u.household_id, it.name, it.qty, HOME_FOR_AISLE[it.aisle] ?? 'Pantry', u.id, now(), now()));
+      moved++;
+    }
+  }
+  await db.batch(stmts);
+  return c.json({ deleted: ticked.results.length, moved });
 });
 
 // ---------- Generic list / create / update / delete ----------
@@ -260,6 +438,7 @@ app.get('/api/:table', async (c) => {
     events: 'date, start_time',
     bills: 'due_date',
     wishes: "status = 'done', created_at DESC",
+    pantry_items: 'location, name COLLATE NOCASE',
   } as Record<string, string>)[table];
   return c.json((await c.env.DB.prepare(sql).bind(...args).all()).results);
 });
@@ -268,7 +447,7 @@ function pick(table: string, body: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   for (const col of TABLES[table]) if (col in body) {
     let v = body[col];
-    if (col === 'ingredients' && Array.isArray(v)) v = JSON.stringify(v);
+    if ((col === 'ingredients' || col === 'exdates') && Array.isArray(v)) v = JSON.stringify(v);
     if (col === 'checked') v = v ? 1 : 0;
     if (typeof v === 'string') v = v.trim();
     out[col] = v === '' ? null : v;
@@ -283,7 +462,7 @@ app.post('/api/:table', async (c) => {
   const data = pick(table, await c.req.json());
   for (const r of REQUIRED[table]) if (data[r] == null) return bad(`Missing ${r}.`);
   if (table === 'shopping_items' && !data.aisle) data.aisle = guessAisle(String(data.name));
-  if (['shopping_items', 'wishes'].includes(table)) data.added_by = u.id;
+  if (['shopping_items', 'wishes', 'pantry_items'].includes(table)) data.added_by = u.id;
   const id = uid(table[0] + '_');
   const row = { id, household_id: u.household_id, ...data, created_at: now(), updated_at: now() };
   const cols = Object.keys(row);
@@ -333,8 +512,8 @@ async function morningReminders(env: Env) {
   for (const user of users) {
     const tokens = (await env.DB.prepare('SELECT token FROM push_tokens WHERE user_id = ?').bind(user.id).all<{ token: string }>()).results;
     if (!tokens.length) continue;
-    const [events, chores, bills] = await env.DB.batch([
-      env.DB.prepare("SELECT title, start_time FROM events WHERE household_id = ? AND date = ? AND who IN ('both', ?) ORDER BY start_time").bind(user.household_id, today, user.id),
+    const events = { results: (await eventsBetween(env.DB, user.household_id, today, today)).filter((e) => e.who === 'both' || e.who === user.id) };
+    const [chores, bills] = await env.DB.batch([
       env.DB.prepare('SELECT title FROM chores WHERE household_id = ? AND done_at IS NULL AND due_date <= ? AND (assignee_id IS NULL OR assignee_id = ?)').bind(user.household_id, today, user.id),
       env.DB.prepare('SELECT name, due_date FROM bills WHERE household_id = ? AND due_date <= ?').bind(user.household_id, soon),
     ]);

@@ -41,8 +41,8 @@ export default function Login() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView contentContainerStyle={{ padding: S.xl, paddingTop: insets.top + 60, gap: S.lg }} keyboardShouldPersistTaps="handled">
-        <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="home-heart" size={32} color="#fff" />
+        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="home-heart" size={32} color={C.onAccent} />
         </View>
         <View>
           <Text style={ui.h1}>Household</Text>

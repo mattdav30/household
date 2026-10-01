@@ -63,10 +63,26 @@ export type Profile = {
   members: Member[];
 };
 
-export type ShoppingItem = { id: string; name: string; qty: string | null; aisle: string; checked: number; added_by: string | null; created_at: number };
-export type Recipe = { id: string; title: string; ingredients: string; url: string | null; notes: string | null };
-export type Meal = { id: string; date: string; slot: string; title: string; recipe_id: string | null; notes: string | null };
+export type ShoppingItem = { id: string; name: string; qty: string | null; aisle: string; checked: number; added_by: string | null; note: string | null; created_at: number };
+export type PantryItem = { id: string; name: string; qty: string | null; location: string; added_by: string | null; updated_at: number };
+export type Recipe = {
+  id: string; title: string; ingredients: string; url: string | null; notes: string | null;
+  image_url: string | null; instructions: string | null; servings: string | null; source: string | null; source_id: string | null;
+};
+export type Ingredient = { name: string; qty: string | null };
+export type CheckedIngredient = Ingredient & { status: 'have' | 'listed' | 'need'; match?: string; location?: string };
+/** A recipe from the online library or an imported link, before it is saved. */
+export type WebRecipe = {
+  id: string; title: string; image_url: string | null; category: string | null; area?: string | null;
+  ingredients: Ingredient[]; instructions: string | null; servings: string | null;
+  source: string; source_id: string | null; source_url: string | null;
+};
+export type RecipeHit = { id: string; title: string; image_url: string | null; category: string | null };
+export type Meal = { id: string; date: string; slot: string; title: string; recipe_id: string | null; notes: string | null; image_url?: string | null };
 export type Chore = { id: string; title: string; assignee_id: string | null; due_date: string | null; repeat: string; done_at: number | null; notes: string | null };
-export type CalEvent = { id: string; title: string; date: string; start_time: string | null; end_time: string | null; who: string; location: string | null; notes: string | null };
+export type CalEvent = {
+  id: string; title: string; date: string; start_time: string | null; end_time: string | null; who: string; location: string | null; notes: string | null;
+  color: string | null; repeat: string; repeat_until: string | null; series_date: string;
+};
 export type Bill = { id: string; name: string; amount_cents: number | null; due_date: string; repeat: string; last_paid_at: number | null; notes: string | null };
 export type Wish = { id: string; list: string; title: string; url: string | null; price_cents: number | null; for_whom: string | null; added_by: string | null; status: string; notes: string | null };

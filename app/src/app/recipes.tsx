@@ -1,73 +1,164 @@
-import { useState } from 'react';
-import { FlatList, Linking, Pressable, Text, View } from 'react-native';
-import { api, changes, type Recipe } from '../lib/api';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { api, changes, type Recipe, type RecipeHit, type WebRecipe } from '../lib/api';
 import { useList } from '../lib/useList';
-import { Card, Empty, ErrorBar, Fab, Field, Icon, Sheet, styles as ui, useForm } from '../components/ui';
 import { BackHeader } from '../components/BackHeader';
+import { Empty, ErrorBar, Fab, Field, HeaderButton, Icon, Segmented, Sheet, styles as ui, tap } from '../components/ui';
+import { parseLine, readIngredients } from '../lib/ingredients';
+import { webRecipes } from '../lib/recipeCache';
 import { C, S } from '../lib/theme';
 
-type Draft = { id?: string; title: string; ingredients: string; url: string; notes: string };
-const blank: Draft = { title: '', ingredients: '', url: '', notes: '' };
+type View_ = 'ours' | 'discover';
+
+function RecipeTile({ title, image, sub, onPress }: { title: string; image: string | null; sub?: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.85 : 1 })}>
+      <View style={{ aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: C.raised, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}>
+        {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : <Icon name="silverware-fork-knife" size={34} color={C.faint} />}
+      </View>
+      <Text style={[ui.rowTitle, { marginTop: 8, fontSize: 15 }]} numberOfLines={2}>{title}</Text>
+      {sub ? <Text style={[ui.rowSub, { marginTop: 1 }]} numberOfLines={1}>{sub}</Text> : null}
+    </Pressable>
+  );
+}
+
+function Grid<T>({ data, render, empty, header }: { data: T[]; render: (t: T) => React.ReactElement; empty?: React.ReactElement; header?: React.ReactElement }) {
+  return (
+    <FlatList
+      data={data}
+      numColumns={2}
+      keyExtractor={(_, i) => String(i)}
+      columnWrapperStyle={{ gap: S.md }}
+      contentContainerStyle={[ui.list, { gap: S.lg }]}
+      keyboardShouldPersistTaps="handled"
+      ListHeaderComponent={header}
+      ListEmptyComponent={empty}
+      renderItem={({ item }) => (
+        <View style={{ flex: 1, maxWidth: '50%' }}>{render(item)}</View>
+      )}
+    />
+  );
+}
 
 export default function Recipes() {
-  const { data, error, reload } = useList<Recipe>('/api/recipes', 'recipes');
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [saving, setSaving] = useState(false);
-  const { form, set } = useForm<Draft>(draft ?? blank, [draft]);
+  const router = useRouter();
+  const [view, setView] = useState<View_>('ours');
+  const { data: saved, error, reload } = useList<Recipe>('/api/recipes', 'recipes');
+  const [cats, setCats] = useState<string[]>([]);
+  const [cat, setCat] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<RecipeHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [link, setLink] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [mForm, setMForm] = useState({ title: '', ingredients: '', instructions: '', url: '' });
 
-  const open = (r: Recipe) => setDraft({
-    id: r.id, title: r.title, url: r.url ?? '', notes: r.notes ?? '',
-    ingredients: (JSON.parse(r.ingredients || '[]') as string[]).join('\n'),
-  });
+  const savedIds = useMemo(() => new Set(saved.map((r) => r.source_id && `mealdb:${r.source_id}`)), [saved]);
 
-  async function save() {
-    if (!form.title.trim()) return;
-    setSaving(true);
-    const body = { title: form.title, url: form.url, notes: form.notes, ingredients: form.ingredients.split('\n').map((s) => s.trim()).filter(Boolean) };
+  async function search(query: string, category: string | null) {
+    setSearching(true); setDiscoverError(null);
     try {
-      if (form.id) await api(`/api/recipes/${form.id}`, { method: 'PATCH', body });
-      else await api('/api/recipes', { method: 'POST', body });
-      setDraft(null); reload(); changes.emit('recipes');
-    } finally { setSaving(false); }
+      const qs = category ? `c=${encodeURIComponent(category)}` : `q=${encodeURIComponent(query)}`;
+      setHits(await api<RecipeHit[]>(`/api/discover/search?${qs}`));
+    } catch (e) { setDiscoverError((e as Error).message); } finally { setSearching(false); }
   }
-  async function remove() {
-    if (!form.id) return;
-    await api(`/api/recipes/${form.id}`, { method: 'DELETE' }).catch(() => undefined);
-    setDraft(null); reload(); changes.emit('recipes');
+
+  useEffect(() => {
+    if (view !== 'discover' || cats.length) return;
+    api<{ name: string }[]>('/api/discover/categories').then((c) => setCats(c.map((x) => x.name))).catch(() => undefined);
+    if (!hits) search('', null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  async function doImport() {
+    setImporting(true);
+    try {
+      const r = await api<WebRecipe>('/api/discover/import', { method: 'POST', body: { url: link } });
+      webRecipes.set(r.id, r);
+      setImportOpen(false); setLink('');
+      router.push({ pathname: '/recipe', params: { id: r.id } });
+    } catch (e) {
+      Alert.alert('Could not import', (e as Error).message);
+    } finally { setImporting(false); }
+  }
+
+  async function saveManual() {
+    if (!mForm.title.trim()) return;
+    const ingredients = mForm.ingredients.split('\n').map((s) => s.trim()).filter(Boolean).map(parseLine);
+    await api('/api/recipes', { method: 'POST', body: { title: mForm.title, ingredients, instructions: mForm.instructions, url: mForm.url, source: 'manual' } })
+      .catch((e) => Alert.alert('Could not save', (e as Error).message));
+    setManual(false); setMForm({ title: '', ingredients: '', instructions: '', url: '' }); reload(); changes.emit('recipes');
   }
 
   return (
     <View style={{ flex: 1 }}>
-      <BackHeader title="Recipes" />
-      <ErrorBar error={error} />
-      <FlatList
-        data={data}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={[ui.list, { gap: S.sm }]}
-        ListEmptyComponent={<Empty icon="book-open-variant" title="No recipes yet" text="Save your regular meals with their ingredients, then send them to the shopping list in one tap." />}
-        renderItem={({ item }) => {
-          const n = (JSON.parse(item.ingredients || '[]') as string[]).length;
-          return (
-            <Pressable onPress={() => open(item)}>
-              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={ui.rowTitle}>{item.title}</Text>
-                  <Text style={ui.rowSub}>{n} ingredient{n === 1 ? '' : 's'}</Text>
-                </View>
-                {item.url ? (
-                  <Pressable hitSlop={10} onPress={() => Linking.openURL(item.url!)}><Icon name="open-in-new" size={20} color={C.accent} /></Pressable>
-                ) : null}
-              </Card>
-            </Pressable>
-          );
-        }}
-      />
-      <Fab onPress={() => setDraft({ ...blank })} />
-      <Sheet visible={!!draft} title={form.id ? 'Edit recipe' : 'New recipe'} onClose={() => setDraft(null)} onSave={save} saving={saving} onDelete={form.id ? remove : undefined}>
-        <Field label="Name" value={form.title} onChangeText={(v) => set('title', v)} placeholder="e.g. Beef tacos" />
-        <Field label="Ingredients, one per line" value={form.ingredients} onChangeText={(v) => set('ingredients', v)} multiline placeholder={'Tortillas\nBeef mince\nLettuce'} style={{ minHeight: 140 }} />
-        <Field label="Link" value={form.url} onChangeText={(v) => set('url', v)} placeholder="Optional recipe link" autoCapitalize="none" keyboardType="url" />
-        <Field label="Notes" value={form.notes} onChangeText={(v) => set('notes', v)} multiline placeholder="Optional" />
+      <BackHeader title="Recipes" right={<HeaderButton icon="link-variant" label="Import link" onPress={() => setImportOpen(true)} />} />
+      <View style={{ paddingHorizontal: S.lg, paddingBottom: S.md }}>
+        <Segmented value={view} onChange={setView} options={[{ value: 'ours', label: `Our recipes${saved.length ? ` · ${saved.length}` : ''}` }, { value: 'discover', label: 'Discover' }]} />
+      </View>
+
+      {view === 'ours' ? (
+        <>
+          <ErrorBar error={error} />
+          <Grid
+            data={saved}
+            render={(r) => (
+              <RecipeTile title={r.title} image={r.image_url} sub={`${readIngredients(r.ingredients).length} ingredients`}
+                onPress={() => router.push({ pathname: '/recipe', params: { id: r.id } })} />
+            )}
+            empty={<Empty icon="book-open-variant" title="No saved recipes yet" text="Find one in Discover, paste a link from any recipe site with Import link, or add your own with the plus button." />}
+          />
+          <Fab onPress={() => setManual(true)} />
+        </>
+      ) : (
+        <>
+          <View style={{ paddingHorizontal: S.lg, gap: S.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, paddingLeft: S.md }}>
+              <Icon name="magnify" color={C.sub} />
+              <TextInput value={q} onChangeText={setQ} placeholder="Search a dish or ingredient, e.g. chicken" placeholderTextColor={C.faint}
+                returnKeyType="search" onSubmitEditing={() => { setCat(null); search(q, null); }} selectionColor={C.accent}
+                style={{ flex: 1, fontSize: 16, paddingVertical: 13, paddingHorizontal: S.sm, color: C.ink }} />
+              {searching ? <ActivityIndicator color={C.accent} style={{ marginRight: S.md }} /> : null}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: S.sm, paddingVertical: S.xs }}>
+              {cats.map((c) => {
+                const on = c === cat;
+                return (
+                  <Pressable key={c} onPress={() => { tap(); const next = on ? null : c; setCat(next); setQ(''); search('', next); }}
+                    style={[ui.chip, on && { backgroundColor: C.accent, borderColor: C.accent }]}>
+                    <Text style={[ui.chipText, on && { color: C.onAccent, fontWeight: '700' }]}>{c}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <ErrorBar error={discoverError} />
+          <Grid
+            data={hits ?? []}
+            header={<Text style={[ui.rowSub, { marginTop: S.sm }]}>{cat ? `${cat} recipes` : q ? `Results for "${q}"` : 'A few ideas to start. Search or pick a category for more.'}</Text>}
+            render={(h) => (
+              <RecipeTile title={h.title} image={h.image_url} sub={savedIds.has(h.id) ? 'Saved' : h.category ?? undefined}
+                onPress={() => router.push({ pathname: '/recipe', params: { id: h.id } })} />
+            )}
+            empty={hits && !searching ? <Empty icon="magnify" title="No matches" text="Try a simpler word, like beef, pasta or curry." /> : undefined}
+          />
+        </>
+      )}
+
+      <Sheet visible={importOpen} title="Import a recipe" onClose={() => setImportOpen(false)} onSave={doImport} saving={importing} saveLabel="Import">
+        <Text style={ui.rowSub}>Paste the link to a recipe page from sites like RecipeTin Eats, taste.com.au or BBC Good Food. The app pulls in the photo, ingredients and method.</Text>
+        <Field label="Recipe link" value={link} onChangeText={setLink} placeholder="https://" autoCapitalize="none" keyboardType="url" autoFocus />
+      </Sheet>
+
+      <Sheet visible={manual} title="New recipe" onClose={() => setManual(false)} onSave={saveManual}>
+        <Field label="Name" value={mForm.title} onChangeText={(v) => setMForm((f) => ({ ...f, title: v }))} placeholder="e.g. Mum's lasagne" />
+        <Field label="Ingredients, one per line" value={mForm.ingredients} onChangeText={(v) => setMForm((f) => ({ ...f, ingredients: v }))} multiline placeholder={'500g beef mince\n1 brown onion\n2 cans diced tomatoes'} style={{ minHeight: 140 }} />
+        <Field label="Method" value={mForm.instructions} onChangeText={(v) => setMForm((f) => ({ ...f, instructions: v }))} multiline placeholder="Optional" />
+        <Field label="Link" value={mForm.url} onChangeText={(v) => setMForm((f) => ({ ...f, url: v }))} placeholder="Optional" autoCapitalize="none" keyboardType="url" />
       </Sheet>
     </View>
   );

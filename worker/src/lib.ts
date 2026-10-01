@@ -87,6 +87,7 @@ const AISLES: [string, string[]][] = [
 
 export function guessAisle(name: string): string {
   const n = ' ' + name.toLowerCase() + ' ';
+  if (/\b(stock|sauce|powder|paste|seasoning|dried|spice|tinned|canned)\b/.test(n)) return 'Pantry';
   for (const [aisle, words] of AISLES) if (words.some((w) => n.includes(w))) return aisle;
   return 'Other';
 }

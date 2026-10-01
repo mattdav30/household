@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { vivid } from './theme';
 import { api, loadToken, saveToken, setUnauthorizedHandler, type Profile } from './api';
 
 type Ctx = {
@@ -52,7 +53,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [profile]);
 
   const memberColor = useCallback((id: string | null | undefined) => {
-    return profile?.members.find((m) => m.id === id)?.color ?? '#6B6F6C';
+    return vivid(profile?.members.find((m) => m.id === id)?.color);
   }, [profile]);
 
   return (

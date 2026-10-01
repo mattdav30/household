@@ -63,3 +63,9 @@ export function toCents(s: string): number | null {
 
 export const REPEATS = ['none', 'daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly'] as const;
 export const repeatLabel = (r: string) => (r === 'none' ? 'Once' : r[0].toUpperCase() + r.slice(1));
+
+/** friendly() for the middle of a sentence: "tomorrow", "Sat 3 Oct". */
+export function friendlyInline(s: string | null): string {
+  const f = friendly(s);
+  return /^(Today|Tomorrow|Yesterday|No date)$/.test(f) ? f.toLowerCase() : f;
+}

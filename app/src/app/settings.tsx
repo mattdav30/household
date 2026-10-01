@@ -5,21 +5,21 @@ import Constants from 'expo-constants';
 import { api, type Profile } from '../lib/api';
 import { useSession } from '../lib/session';
 import { BackHeader } from '../components/BackHeader';
-import { Button, Card, Chips, Field, SectionTitle, styles as ui } from '../components/ui';
-import { C, S } from '../lib/theme';
+import { Button, Card, Chips, Field, SectionTitle, Segmented, styles as ui } from '../components/ui';
+import { C, MEMBER_COLORS, MODE, S, setMode, vivid, type Mode } from '../lib/theme';
 
-const COLORS = ['#1F6F5C', '#B4654A', '#3D5A80', '#8A5A9E', '#C29A2E', '#2F2F2F'];
+const COLORS = MEMBER_COLORS;
 
 export default function Settings() {
   const { profile, refresh, signOut } = useSession();
   const [name, setName] = useState(profile?.user.name ?? '');
   const [home, setHome] = useState(profile?.household.name ?? '');
-  const [color, setColor] = useState(profile?.user.color ?? COLORS[0]);
+  const [color, setColor] = useState(vivid(profile?.user.color) ?? COLORS[0]);
   const [busy, setBusy] = useState(false);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile) { setName(profile.user.name); setHome(profile.household.name); setColor(profile.user.color); }
+    if (profile) { setName(profile.user.name); setHome(profile.household.name); setColor(vivid(profile.user.color)); }
   }, [profile]);
 
   async function save() {
@@ -66,6 +66,12 @@ export default function Settings() {
           <Field label="Household name" value={home} onChangeText={setHome} />
           <Text style={ui.rowSub}>Signed in as {profile.user.email}</Text>
           <Button title="Save" onPress={save} busy={busy} />
+        </Card>
+
+        <SectionTitle>Appearance</SectionTitle>
+        <Card style={{ gap: S.md }}>
+          <Segmented<Mode> value={MODE} onChange={(m) => { if (m !== MODE) setMode(m); }} options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]} />
+          <Text style={ui.rowSub}>The app restarts to switch. Each phone keeps its own choice.</Text>
         </Card>
 
         <SectionTitle>App</SectionTitle>

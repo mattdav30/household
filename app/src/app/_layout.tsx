@@ -6,7 +6,7 @@ import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../lib/session';
 import { listenForChanges, registerForPush } from '../lib/push';
-import { C } from '../lib/theme';
+import { C, MODE } from '../lib/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -32,7 +32,7 @@ function Gate() {
     const tapSub = Notifications.addNotificationResponseReceivedListener((r) => {
       const data = r.notification.request.content.data as { table?: string; screen?: string } | undefined;
       const route: Record<string, string> = {
-        shopping_items: '/shopping', meals: '/meals', events: '/calendar', chores: '/chores', bills: '/bills', wishes: '/lists',
+        shopping_items: '/shopping', pantry_items: '/shopping', meals: '/meals', events: '/calendar', chores: '/chores', bills: '/bills', wishes: '/lists',
       };
       const target = data?.table ? route[data.table] : '/';
       if (target) router.push(target as never);
@@ -55,7 +55,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <SessionProvider>
-        <StatusBar style="dark" />
+        <StatusBar style={MODE === 'dark' ? 'light' : 'dark'} />
         <Gate />
       </SessionProvider>
     </SafeAreaProvider>
