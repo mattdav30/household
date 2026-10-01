@@ -2,6 +2,7 @@
   "expo": {
     "name": "Household",
     "slug": "household",
+    "owner": "metheni",
     "scheme": "household",
     "version": "1.0.0",
     "orientation": "portrait",
