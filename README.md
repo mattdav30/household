@@ -6,7 +6,7 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 
 | Part | Where | Cost |
 | --- | --- | --- |
-| API (`worker/`) | Cloudflare Workers, database on Cloudflare D1 | Free plan |
+| API (`worker/`) | Cloudflare Workers, deployed by Cloudflare Workers Builds on every push, database on Cloudflare D1 | Free plan |
 | Phone app (`app/`) | Expo (React Native), installed as an APK | Free |
 | APK builds | GitHub Actions, `Build Android app` workflow | Free |
 | Over the air updates | Expo EAS Update, `Send app update` workflow | Free plan |
@@ -15,12 +15,11 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 ## Everyday use
 
 * Change screens or logic under `app/src`, push to `main`, and both phones pick up the update on next launch.
-* Change the API under `worker/`, push to `main`, and the `Deploy API` workflow applies database migrations and deploys.
+* Change the API under `worker/`, push to `main`, and Cloudflare runs `npm run deploy`, which applies database migrations and deploys.
 * Change native settings (`app/app.json`, new native packages, icon), bump `version` in `app/app.json`, then run `Build Android app` and install the new APK from the release page.
 
 ## GitHub secrets
 
-* `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for the API deploy.
 * `EXPO_TOKEN` for over the air updates.
 
 ## Local development

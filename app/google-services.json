@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "131921119818",
+    "project_id": "household-9622c",
+    "storage_bucket": "household-9622c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:131921119818:android:7d29c028be07a0067434b3",
+        "android_client_info": {
+          "package_name": "com.mattdav30.household"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZ32IRGvbJgMLIP6hZsj2mr9iuQd8y72c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
