@@ -9,7 +9,7 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 | API (`worker/`) | Cloudflare Workers, deployed by Cloudflare Workers Builds on every push, database on Cloudflare D1 | Free plan |
 | Phone app (`app/`) | Expo (React Native), installed as an APK | Free |
 | APK builds | GitHub Actions, `Build Android app` workflow | Free |
-| Over the air updates | Expo EAS Update, `Send app update` workflow | Free plan |
+| Over the air updates | Expo EAS Update, run by the Expo workflow in `app/.eas/workflows/update.yml` | Free plan |
 | Push notifications | Expo push service through Firebase Cloud Messaging | Free |
 
 ## Everyday use
@@ -20,7 +20,6 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 
 ## GitHub secrets
 
-* `EXPO_TOKEN` for over the air updates.
 
 ## Local development
 
