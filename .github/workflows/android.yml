@@ -1,11 +1,12 @@
 name: Build Android app
 
 # Builds a signed APK and attaches it to a GitHub release.
-# Run it by hand from the Actions tab, or push a tag like v1.0.0.
+# Runs when native settings change (app.json, packages, this file), or by hand from the Actions tab.
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['app/app.json', 'app/package.json', 'app/google-services.json', '.github/workflows/android.yml']
 
 permissions:
   contents: write
@@ -39,6 +40,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
-          name: Household ${{ github.ref_type == 'tag' && github.ref_name || format('build {0}', github.run_number) }}
+          tag_name: build-${{ github.run_number }}
+          name: Household build ${{ github.run_number }}
+          make_latest: true
           files: Household.apk
