@@ -8,12 +8,13 @@ import {
 } from '../../components/ui';
 import { friendly, friendlyInline, iso, money, parse, repeatLabel, time12, today } from '../../lib/dates';
 import { C, EVENT_COLORS, S, tint } from '../../lib/theme';
+import { Appear } from '../../components/Appear';
 
 type Draft = {
   id?: string; occurrence?: string; title: string; date: string; start_time: string | null; end_time: string | null;
   who: string; location: string; notes: string; color: string | null; repeat: string; repeat_until: string | null;
 };
-type Chip = { key: string; label: string; color: string; time: string; kind: 'event' | 'chore' | 'bill'; ev?: CalEvent; sub?: string };
+type Chip = { key: string; label: string; color: string; time: string; kind: 'event' | 'chore' | 'bill' | 'holiday'; ev?: CalEvent; sub?: string };
 
 const EVENT_REPEATS = ['none', 'daily', 'weekly', 'fortnightly', 'monthly', 'yearly'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -52,7 +53,10 @@ export default function Calendar() {
   const byDay = useMemo(() => {
     const map: Record<string, Chip[]> = {};
     const push = (d: string | null, c: Chip) => { if (d) (map[d] ??= []).push(c); };
-    for (const e of events) push(e.date, { key: e.id + e.date, label: e.title, color: evColor(e), time: e.start_time ?? '', kind: 'event', ev: e });
+    for (const e of events) {
+      if ((e as CalEvent & { holiday?: boolean }).holiday) push(e.date, { key: e.id, label: e.title, color: e.color ?? '#E8B931', time: '', kind: 'holiday', sub: e.notes ?? 'Queensland public holiday' });
+      else push(e.date, { key: e.id + e.date, label: e.title, color: evColor(e), time: e.start_time ?? '', kind: 'event', ev: e });
+    }
     for (const c of chores) if (!c.done_at) push(c.due_date, { key: c.id, label: c.title, color: c.assignee_id ? memberColor(c.assignee_id) : '#8C9A95', time: '99', kind: 'chore', sub: memberName(c.assignee_id) });
     for (const b of bills) push(b.due_date, { key: b.id, label: b.name, color: C.warm, time: '98', kind: 'bill', sub: money(b.amount_cents) });
     for (const k of Object.keys(map)) map[k].sort((a, b) => (a.time || '00').localeCompare(b.time || '00'));
@@ -109,7 +113,7 @@ export default function Calendar() {
       } />
       <ErrorBar error={error} />
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        <View style={{ paddingHorizontal: 6 }}>
+        <Appear key={month} style={{ paddingHorizontal: 6 }}>
           <View style={{ flexDirection: 'row', paddingBottom: 6 }}>
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
               <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: C.faint, letterSpacing: 0.5 }}>{d.toUpperCase()}</Text>
@@ -145,7 +149,7 @@ export default function Calendar() {
               </View>
             ))}
           </View>
-        </View>
+        </Appear>
 
         <View style={{ paddingHorizontal: S.lg }}>
           <SectionTitle>{friendly(selected)}</SectionTitle>
@@ -161,7 +165,7 @@ export default function Calendar() {
                 <Pressable style={ui.row} disabled={!c.ev} onPress={() => c.ev && openEvent(c.ev)}>
                   <View style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, backgroundColor: c.color }} />
                   <View style={{ width: 62 }}>
-                    {c.kind === 'event' ? (
+                    {c.kind === 'holiday' ? <Icon name="flag-variant" size={20} color={c.color} /> : c.kind === 'event' ? (
                       <>
                         <Text style={{ fontWeight: '700', color: C.ink }}>{c.ev?.start_time ? time12(c.ev.start_time) : 'All day'}</Text>
                         {c.ev?.end_time ? <Text style={ui.rowSub}>{time12(c.ev.end_time)}</Text> : null}

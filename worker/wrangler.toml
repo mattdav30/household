@@ -5,9 +5,9 @@ compatibility_date = "2026-09-01"
 [vars]
 TZ_OFFSET_MIN = "600"
 
-# 7:00am Brisbane = 21:00 UTC the day before
+# Every hour; each person picks the hour of their daily summary
 [triggers]
-crons = ["0 21 * * *"]
+crons = ["0 * * * *"]
 
 [[d1_databases]]
 binding = "DB"

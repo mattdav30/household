@@ -4,6 +4,7 @@ import { api, changes, type Wish } from '../lib/api';
 import { useList } from '../lib/useList';
 import { useSession } from '../lib/session';
 import { BackHeader } from '../components/BackHeader';
+import { animateList } from '../lib/motion';
 import { Button, Card, Check, Chips, Empty, ErrorBar, Fab, Field, Icon, Loading, Sheet, styles as ui, useForm } from '../components/ui';
 import { money, toCents } from '../lib/dates';
 import { C, S } from '../lib/theme';
@@ -30,6 +31,7 @@ export default function Lists() {
 
   async function toggle(w: Wish) {
     const status = w.status === 'done' ? 'open' : 'done';
+    animateList();
     setData((d) => d.map((x) => (x.id === w.id ? { ...x, status } : x)));
     api(`/api/wishes/${w.id}`, { method: 'PATCH', body: { status } }).catch(reload);
   }

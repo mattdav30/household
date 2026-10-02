@@ -6,6 +6,7 @@ import { useList, useObject } from '../../lib/useList';
 import { addMissingFor, readiness } from '../../lib/autoShop';
 import { Button, Card, Check, Chips, ErrorBar, Field, Header, HeaderButton, Icon, IconBadge, Sheet, styles as ui, tap, useForm } from '../../components/ui';
 import { ShopSheet } from '../../components/ShopSheet';
+import { Appear } from '../../components/Appear';
 import { mergeIngredients, readIngredients } from '../../lib/ingredients';
 import { addDays, dayName, dayNum, friendly, startOfWeek, today } from '../../lib/dates';
 import { C, S } from '../../lib/theme';
@@ -98,11 +99,12 @@ export default function Meals() {
             <Icon name="chevron-right" color={C.accent} />
           </Card>
         </Pressable>
-        {days.map((d) => {
+        {days.map((d, di) => {
           const list = meals.filter((m) => m.date === d).sort((a, b) => slotOrder(a.slot) - slotOrder(b.slot));
           const isToday = d === today();
           return (
-            <Card key={d} style={[{ flexDirection: 'row', gap: S.lg, paddingVertical: S.md }, isToday ? { borderColor: C.accent } : {}]}>
+            <Appear key={week + d} index={di + 1}>
+            <Card style={[{ flexDirection: 'row', gap: S.lg, paddingVertical: S.md }, isToday ? { borderColor: C.accent } : {}]}>
               <View style={{ width: 42, alignItems: 'center' }}>
                 <Text style={{ fontSize: 12, fontWeight: '800', color: isToday ? C.accent : C.sub, letterSpacing: 0.5 }}>{dayName(d).toUpperCase()}</Text>
                 <Text style={{ fontSize: 24, fontWeight: '800', color: isToday ? C.accent : C.ink }}>{dayNum(d)}</Text>
@@ -135,6 +137,7 @@ export default function Meals() {
                 </Pressable>
               </View>
             </Card>
+            </Appear>
           );
         })}
       </ScrollView>

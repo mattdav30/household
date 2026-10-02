@@ -6,6 +6,7 @@ import { useList } from '../../lib/useList';
 import { useSession } from '../../lib/session';
 import { Check, Chips, Empty, ErrorBar, Field, Header, HeaderButton, Loading, Segmented, Sheet, styles as ui, tap, useForm } from '../../components/ui';
 import { Pantry } from '../../components/Pantry';
+import { animateList } from '../../lib/motion';
 import { AddBar, groupRowStyle } from '../../components/ListBits';
 import { C, S } from '../../lib/theme';
 
@@ -41,12 +42,14 @@ export default function Shopping() {
     const body = m && m[1] ? { name: m[1], qty: m[2] } : { name };
     try {
       const row = await api<ShoppingItem>('/api/shopping_items', { method: 'POST', body });
+      animateList();
       setData((d) => [...d, row]);
     } catch { setText(name); }
   }
 
   async function toggle(item: ShoppingItem) {
     const checked = item.checked ? 0 : 1;
+    animateList();
     setData((d) => d.map((i) => (i.id === item.id ? { ...i, checked } : i)));
     api(`/api/shopping_items/${item.id}`, { method: 'PATCH', body: { checked } }).catch(reload);
   }
@@ -54,6 +57,7 @@ export default function Shopping() {
   async function doneShopping() {
     tap();
     const n = data.filter((i) => i.checked).length;
+    animateList();
     setData((d) => d.filter((i) => !i.checked));
     try {
       await api('/api/shopping_items/clear-checked', { method: 'POST' });
@@ -70,6 +74,7 @@ export default function Shopping() {
   }
   async function remove() {
     if (!edit) return;
+    animateList();
     setData((d) => d.filter((i) => i.id !== edit.id));
     setEdit(null);
     await api(`/api/shopping_items/${edit.id}`, { method: 'DELETE' }).catch(reload);

@@ -9,6 +9,10 @@ import { Button, Card, Chips, Field, SectionTitle, Segmented, styles as ui } fro
 import { C, MEMBER_COLORS, MODE, S, setMode, vivid, type Mode } from '../lib/theme';
 
 const COLORS = MEMBER_COLORS;
+const HOURS = [
+  { value: 'off', label: 'Off' }, { value: '6', label: '6am' }, { value: '7', label: '7am' }, { value: '8', label: '8am' },
+  { value: '9', label: '9am' }, { value: '18', label: '6pm' }, { value: '20', label: '8pm' },
+];
 
 export default function Settings() {
   const { profile, refresh, signOut } = useSession();
@@ -17,6 +21,24 @@ export default function Settings() {
   const [color, setColor] = useState(vivid(profile?.user.color) ?? COLORS[0]);
   const [busy, setBusy] = useState(false);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [hour, setHour] = useState<string>(profile?.user.notify_hour == null ? (profile?.user.notify_hour === null ? 'off' : '7') : String(profile.user.notify_hour));
+  const [testing, setTesting] = useState(false);
+
+  async function saveHour(v: string) {
+    const prev = hour;
+    setHour(v);
+    try {
+      await api('/api/me', { method: 'PATCH', body: { notify_hour: v === 'off' ? null : Number(v) } });
+      await refresh();
+    } catch (e) { setHour(prev); Alert.alert('Could not save', (e as Error).message); }
+  }
+  async function testSummary() {
+    setTesting(true);
+    try {
+      const r = await api<{ title: string; body: string; sent: number }>('/api/summary/test', { method: 'POST' });
+      if (!r.sent) Alert.alert(r.title, `${r.body}\n\nThis phone has no notification permission yet. Allow notifications for Household in Android settings.`);
+    } catch (e) { Alert.alert('Could not send', (e as Error).message); } finally { setTesting(false); }
+  }
 
   useEffect(() => {
     if (profile) { setName(profile.user.name); setHome(profile.household.name); setColor(vivid(profile.user.color)); }
@@ -66,6 +88,13 @@ export default function Settings() {
           <Field label="Household name" value={home} onChangeText={setHome} />
           <Text style={ui.rowSub}>Signed in as {profile.user.email}</Text>
           <Button title="Save" onPress={save} busy={busy} />
+        </Card>
+
+        <SectionTitle>Daily summary</SectionTitle>
+        <Card style={{ gap: S.md }}>
+          <Text style={ui.rowSub}>A notification each day with what's on the calendar, public holidays, chores due and bills coming up. Each phone picks its own time.</Text>
+          <Chips<string> value={hour} onChange={saveHour} options={HOURS.map((h) => ({ value: h.value, label: h.label }))} />
+          <Button kind="soft" icon="bell-ring-outline" title="Send me today's summary now" onPress={testSummary} busy={testing} />
         </Card>
 
         <SectionTitle>Appearance</SectionTitle>

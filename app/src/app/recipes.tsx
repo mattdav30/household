@@ -7,6 +7,7 @@ import { BackHeader } from '../components/BackHeader';
 import { Empty, ErrorBar, Fab, Field, HeaderButton, Icon, Segmented, Sheet, styles as ui, tap } from '../components/ui';
 import { parseLine, readIngredients } from '../lib/ingredients';
 import { webRecipes } from '../lib/recipeCache';
+import { Appear } from '../components/Appear';
 import { C, S } from '../lib/theme';
 
 type View_ = 'ours' | 'discover';
@@ -34,8 +35,8 @@ function Grid<T>({ data, render, empty, header }: { data: T[]; render: (t: T) =>
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={header}
       ListEmptyComponent={empty}
-      renderItem={({ item }) => (
-        <View style={{ flex: 1, maxWidth: '50%' }}>{render(item)}</View>
+      renderItem={({ item, index }) => (
+        <Appear index={index} style={{ flex: 1, maxWidth: '50%' }}>{render(item)}</Appear>
       )}
     />
   );

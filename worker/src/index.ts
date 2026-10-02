@@ -4,10 +4,11 @@ import {
   uid, inviteCode, hashPassword, safeEqual, now, localDate, addDays, advance, guessAisle, sendPush, PushMsg,
 } from './lib';
 import { expandEvents } from './recur';
+import { holidayEvents } from './holidays';
 import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, normIngredients, sameThing, type Ingredient } from './food';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string };
-type User = { id: string; household_id: string; email: string; name: string; color: string };
+type User = { id: string; household_id: string; email: string; name: string; color: string; notify_hour?: number | null };
 type Vars = { user: User };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -46,7 +47,7 @@ async function createSession(db: D1Database, userId: string) {
 }
 
 async function profile(db: D1Database, userId: string) {
-  const user = await db.prepare('SELECT id, household_id, email, name, color FROM users WHERE id = ?').bind(userId).first<User>();
+  const user = await db.prepare('SELECT id, household_id, email, name, color, notify_hour FROM users WHERE id = ?').bind(userId).first<User>();
   const household = await db.prepare('SELECT id, name, invite_code FROM households WHERE id = ?').bind(user!.household_id).first();
   const members = (await db.prepare('SELECT id, name, color FROM users WHERE household_id = ? ORDER BY created_at')
     .bind(user!.household_id).all()).results;
@@ -130,8 +131,11 @@ app.post('/api/logout', async (c) => {
 });
 
 app.patch('/api/me', async (c) => {
-  const b = await c.req.json<{ name?: string; color?: string; household_name?: string }>();
+  const b = await c.req.json<{ name?: string; color?: string; household_name?: string; notify_hour?: number | null }>();
   const u = c.get('user');
+  if (b.notify_hour === null || (typeof b.notify_hour === 'number' && b.notify_hour >= 0 && b.notify_hour <= 23)) {
+    await c.env.DB.prepare('UPDATE users SET notify_hour = ? WHERE id = ?').bind(b.notify_hour === null ? null : Math.floor(b.notify_hour), u.id).run();
+  }
   if (b.name?.trim()) await c.env.DB.prepare('UPDATE users SET name = ? WHERE id = ?').bind(b.name.trim(), u.id).run();
   if (b.color) await c.env.DB.prepare('UPDATE users SET color = ? WHERE id = ?').bind(b.color, u.id).run();
   if (b.household_name?.trim()) {
@@ -177,7 +181,8 @@ async function eventsBetween(db: D1Database, householdId: string, from: string, 
     `SELECT * FROM events WHERE household_id = ? AND date <= ?
      AND ((repeat = 'none' AND date >= ?) OR (repeat != 'none' AND (repeat_until IS NULL OR repeat_until >= ?)))`,
   ).bind(householdId, to, from, from).all<Record<string, any>>()).results;
-  return expandEvents(rows as any[], from, to);
+  const all = [...expandEvents(rows as any[], from, to), ...holidayEvents(from, to)];
+  return all.sort((a, b) => (a.date + ((a as any).start_time ?? '')).localeCompare(b.date + ((b as any).start_time ?? '')));
 }
 
 app.get('/api/today', async (c) => {
@@ -577,34 +582,63 @@ app.onError((err) => {
 
 // ---------- Daily 7am reminder ----------
 
-async function morningReminders(env: Env) {
-  const today = localDate(tz(env));
-  const soon = addDays(today, 3);
-  const users = (await env.DB.prepare('SELECT id, household_id, name FROM users').all<{ id: string; household_id: string; name: string }>()).results;
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function time12(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}${h >= 12 ? 'pm' : 'am'}`;
+}
+
+/** Builds one person's daily calendar summary, or null when there is nothing worth saying. */
+async function dailySummary(env: Env, user: { id: string; household_id: string; name: string }, today: string) {
+  const events = (await eventsBetween(env.DB, user.household_id, today, today))
+    .filter((e: any) => e.holiday || e.who === 'both' || e.who === user.id);
+  const [chores, bills] = await env.DB.batch([
+    env.DB.prepare('SELECT title FROM chores WHERE household_id = ? AND done_at IS NULL AND due_date <= ? AND (assignee_id IS NULL OR assignee_id = ?)').bind(user.household_id, today, user.id),
+    env.DB.prepare('SELECT name, due_date FROM bills WHERE household_id = ? AND due_date <= ? ORDER BY due_date').bind(user.household_id, addDays(today, 3)),
+  ]);
+  const lines: string[] = [];
+  for (const e of events as any[]) lines.push(e.holiday ? `Public holiday: ${e.title}` : `${e.start_time ? time12(e.start_time) + ' ' : 'All day: '}${e.title}`);
+  const ch = chores.results as { title: string }[];
+  if (ch.length) lines.push(`Chores: ${ch.slice(0, 3).map((x) => x.title).join(', ')}${ch.length > 3 ? ` and ${ch.length - 3} more` : ''}`);
+  const bl = bills.results as { name: string; due_date: string }[];
+  if (bl.length) lines.push(`Bills due: ${bl.map((x) => x.due_date === today ? `${x.name} today` : x.name).join(', ')}`);
+  const d = new Date(today + 'T00:00:00Z');
+  const title = `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return { title, body: lines.length ? lines.join('\n') : 'Nothing on the calendar today.' };
+}
+
+/** Runs hourly; each person gets their summary at the hour they picked. */
+async function hourlyJobs(env: Env) {
+  const local = new Date(Date.now() + tz(env) * 60000);
+  const hour = local.getUTCHours();
+  const today = local.toISOString().slice(0, 10);
+  const users = (await env.DB.prepare('SELECT id, household_id, name FROM users WHERE notify_hour = ?').bind(hour)
+    .all<{ id: string; household_id: string; name: string }>()).results;
   const msgs: PushMsg[] = [];
   for (const user of users) {
     const tokens = (await env.DB.prepare('SELECT token FROM push_tokens WHERE user_id = ?').bind(user.id).all<{ token: string }>()).results;
     if (!tokens.length) continue;
-    const events = { results: (await eventsBetween(env.DB, user.household_id, today, today)).filter((e) => e.who === 'both' || e.who === user.id) };
-    const [chores, bills] = await env.DB.batch([
-      env.DB.prepare('SELECT title FROM chores WHERE household_id = ? AND done_at IS NULL AND due_date <= ? AND (assignee_id IS NULL OR assignee_id = ?)').bind(user.household_id, today, user.id),
-      env.DB.prepare('SELECT name, due_date FROM bills WHERE household_id = ? AND due_date <= ?').bind(user.household_id, soon),
-    ]);
-    const parts: string[] = [];
-    if (events.results.length) parts.push(`${events.results.length} on the calendar`);
-    if (chores.results.length) parts.push(`${chores.results.length} chore${chores.results.length > 1 ? 's' : ''} due`);
-    if (bills.results.length) parts.push(`${bills.results.length} bill${bills.results.length > 1 ? 's' : ''} due soon`);
-    if (!parts.length) continue;
-    for (const t of tokens) msgs.push({ to: t.token, title: `Morning ${user.name}`, body: parts.join(', '), data: { screen: 'today' } });
+    const s = await dailySummary(env, user, today);
+    for (const t of tokens) msgs.push({ to: t.token, title: s.title, body: s.body, data: { table: 'events' } });
   }
   await sendPush(msgs);
-  // Tidy expired sessions.
-  await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now()).run();
+  if (hour === 3) await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now()).run();
 }
+
+// Lets the app preview the summary and send a test to this phone.
+app.post('/api/summary/test', async (c) => {
+  const u = c.get('user');
+  const today = localDate(tz(c.env));
+  const s = await dailySummary(c.env, u, today);
+  const tokens = (await c.env.DB.prepare('SELECT token FROM push_tokens WHERE user_id = ?').bind(u.id).all<{ token: string }>()).results;
+  await sendPush(tokens.map((t) => ({ to: t.token, title: s.title, body: s.body, data: { table: 'events' } })));
+  return c.json({ ...s, sent: tokens.length });
+});
 
 export default {
   fetch: app.fetch,
-  scheduled: (_e: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(morningReminders(env)),
+  scheduled: (_e: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(hourlyJobs(env)),
 };
 
-export { morningReminders };
+export { hourlyJobs };

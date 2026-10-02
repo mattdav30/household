@@ -3,6 +3,7 @@ import { Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-
 import { useRouter } from 'expo-router';
 import { api, changes, type Bill, type CalEvent, type Chore, type Meal } from '../../lib/api';
 import { useObject } from '../../lib/useList';
+import { Appear } from '../../components/Appear';
 import { useSession } from '../../lib/session';
 import { Card, Check, ErrorBar, Header, Icon, IconBadge, Pill, SectionTitle, styles as ui, type IconName } from '../../components/ui';
 import { daysUntil, friendly, friendlyInline, money, time12 } from '../../lib/dates';
@@ -52,12 +53,13 @@ export default function TodayScreen() {
       <ScrollView contentContainerStyle={ui.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await reload(); setRefreshing(false); }} tintColor={C.accent} colors={[C.accent]} progressBackgroundColor={C.card} />}>
 
-        <View style={{ flexDirection: 'row', gap: S.sm + 2, marginTop: S.sm }}>
+        <Appear index={1} style={{ flexDirection: 'row', gap: S.sm + 2, marginTop: S.sm }}>
           <Tile icon="cart-outline" color="#34C08A" label="to buy" value={String(data?.shopping_open ?? '·')} onPress={() => router.push('/shopping')} />
           <Tile icon="broom" color="#5B8DEF" label="chores due" value={String(data?.chores.length ?? '·')} onPress={() => router.push('/chores')} />
           <Tile icon="receipt-text-outline" color="#F2875E" label="bills this week" value={data ? (billsTotal ? money(billsTotal) : String(data.bills.length)) : '·'} onPress={() => router.push('/bills')} />
-        </View>
+        </Appear>
 
+        <Appear index={2}>
         <SectionTitle>Dinner tonight</SectionTitle>
         <Pressable onPress={() => router.push(dinner ? '/meals' : '/ideas')} accessibilityRole="button" style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
           {dinner?.image_url ? (
@@ -80,7 +82,9 @@ export default function TodayScreen() {
             </Card>
           )}
         </Pressable>
+        </Appear>
 
+        <Appear index={3}>
         <SectionTitle right={<Pressable onPress={() => router.push('/calendar')}><Text style={{ color: C.accent, fontWeight: '700' }}>Calendar</Text></Pressable>}>Coming up</SectionTitle>
         <Card style={{ paddingVertical: S.xs }}>
           {data && !data.events.length ? <Text style={[ui.rowSub, { paddingVertical: S.md }]}>A clear few days on the calendar.</Text> : null}
@@ -93,14 +97,16 @@ export default function TodayScreen() {
                   <Text style={ui.rowTitle}>{e.title}</Text>
                   <Text style={ui.rowSub}>{friendly(e.date)}{e.start_time ? ` · ${time12(e.start_time)}` : ''}{e.who !== 'both' ? ` · ${memberName(e.who)}` : ''}</Text>
                 </View>
-                {e.repeat && e.repeat !== 'none' ? <Icon name="repeat" size={16} color={C.faint} /> : null}
+                {(e as CalEvent & { holiday?: boolean }).holiday ? <Icon name="flag-variant-outline" size={16} color={C.faint} /> : e.repeat && e.repeat !== 'none' ? <Icon name="repeat" size={16} color={C.faint} /> : null}
               </Pressable>
             </View>
           ))}
         </Card>
+        </Appear>
 
         {data?.chores.length ? (
           <>
+        <Appear index={4}>
             <SectionTitle>Chores due</SectionTitle>
             <Card style={{ paddingVertical: S.xs }}>
               {data.chores.map((c, i) => (
@@ -119,11 +125,13 @@ export default function TodayScreen() {
                 </View>
               ))}
             </Card>
+        </Appear>
           </>
         ) : null}
 
         {data?.bills.length ? (
           <>
+        <Appear index={5}>
             <SectionTitle>Bills due soon</SectionTitle>
             <Card style={{ paddingVertical: S.xs }}>
               {data.bills.map((b, i) => {
@@ -143,6 +151,7 @@ export default function TodayScreen() {
                 );
               })}
             </Card>
+        </Appear>
           </>
         ) : null}
       </ScrollView>

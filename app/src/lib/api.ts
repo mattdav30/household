@@ -58,7 +58,7 @@ export const changes = {
 
 export type Member = { id: string; name: string; color: string };
 export type Profile = {
-  user: { id: string; household_id: string; email: string; name: string; color: string };
+  user: { id: string; household_id: string; email: string; name: string; color: string; notify_hour?: number | null };
   household: { id: string; name: string; invite_code: string };
   members: Member[];
 };

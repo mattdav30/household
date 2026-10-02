@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text,
+  AccessibilityInfo, Animated, Easing, ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text,
   TextInput, View, type TextInputProps, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { C, R, S, tint } from '../lib/theme';
 import { friendly, iso, parse, time12 } from '../lib/dates';
+import { reduceMotion } from '../lib/motion';
+import { usePop } from './Appear';
 
 export type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 export const Icon = ({ name, size = 22, color = C.ink }: { name: IconName; size?: number; color?: string }) => (
@@ -54,20 +56,27 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
 }
 
 export function Check({ on, onPress, color = C.accent, label }: { on: boolean; onPress: () => void; color?: string; label?: string }) {
+  const { scale, pop } = usePop();
   return (
-    <Pressable hitSlop={10} onPress={() => { tap(); onPress(); }} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={label}
-      style={({ pressed }) => [styles.check, on && { backgroundColor: color, borderColor: color }, { transform: [{ scale: pressed ? 0.88 : 1 }] }]}>
-      {on ? <Icon name="check" size={16} color={C.onAccent} /> : null}
+    <Pressable hitSlop={10} onPress={() => { tap(); if (!on) pop(); onPress(); }} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={label}>
+      <Animated.View style={[styles.check, on && { backgroundColor: color, borderColor: color }, { transform: [{ scale }] }]}>
+        {on ? <Icon name="check" size={16} color={C.onAccent} /> : null}
+      </Animated.View>
     </Pressable>
   );
 }
 
 export function Fab({ onPress, icon = 'plus', label = 'Add' }: { onPress: () => void; icon?: IconName; label?: string }) {
   const insets = useSafeAreaInsets();
+  const s = useRef(new Animated.Value(1)).current;
+  const to = (v: number) => { if (!reduceMotion()) Animated.spring(s, { toValue: v, friction: 5, tension: 300, useNativeDriver: true }).start(); };
   return (
-    <Pressable onPress={() => { tap(); onPress(); }} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 20, transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
-      <Icon name={icon} size={28} color={C.onAccent} />
-    </Pressable>
+    <Animated.View style={[styles.fab, { bottom: insets.bottom + 20, transform: [{ scale: s }] }]}>
+      <Pressable onPress={() => { tap(); onPress(); }} onPressIn={() => to(0.9)} onPressOut={() => to(1)} accessibilityRole="button" accessibilityLabel={label}
+        style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={28} color={C.onAccent} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -173,13 +182,28 @@ export function Chips<T extends string>({ label, value, options, onChange }: {
 
 /** Two to four options in a pill track, for switching views. */
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  // The highlight slides between options to show the view changing.
+  const [w, setW] = useState(0);
+  const idx = Math.max(0, options.findIndex((o) => o.value === value));
+  const x = useRef(new Animated.Value(idx)).current;
+  useEffect(() => {
+    if (reduceMotion()) { x.setValue(idx); return; }
+    Animated.timing(x, { toValue: idx, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [idx, x]);
+  const seg = w ? (w - 8) / options.length : 0;
   return (
-    <View style={styles.segTrack} accessibilityRole="tablist">
+    <View style={styles.segTrack} accessibilityRole="tablist" onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      {seg ? (
+        <Animated.View pointerEvents="none" style={[styles.segOn, {
+          position: 'absolute', top: 4, bottom: 4, left: 4, width: seg, borderRadius: 10,
+          transform: [{ translateX: x.interpolate({ inputRange: [0, Math.max(1, options.length - 1)], outputRange: [0, seg * Math.max(1, options.length - 1)] }) }],
+        }]} />
+      ) : null}
       {options.map((o) => {
         const on = o.value === value;
         return (
           <Pressable key={o.value} onPress={() => { tap(); onChange(o.value); }} accessibilityRole="tab" accessibilityState={{ selected: on }}
-            style={({ pressed }) => [styles.segItem, on && styles.segOn, pressed && !on && { opacity: 0.7 }]}>
+            style={({ pressed }) => [styles.segItem, !seg && on && styles.segOn, pressed && !on && { opacity: 0.7 }]}>
             <Text style={[styles.segText, on && { color: C.ink }]}>{o.label}</Text>
           </Pressable>
         );

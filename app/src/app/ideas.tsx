@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { type Suggestion } from '../lib/api';
 import { useObject } from '../lib/useList';
 import { BackHeader } from '../components/BackHeader';
+import { Appear } from '../components/Appear';
 import { Button, Card, Empty, ErrorBar, Icon, Loading, SectionTitle, styles as ui } from '../components/ui';
 import { C, S } from '../lib/theme';
 
@@ -59,14 +60,14 @@ export default function IdeasScreen() {
           <SectionTitle>From our recipes</SectionTitle>
           {data.saved.length ? (
             <Card style={{ paddingVertical: S.xs }}>
-              {data.saved.map((s, i) => <Row key={s.id} s={s} first={i === 0} onPress={() => open(s.id)} />)}
+              {data.saved.map((s, i) => <Appear key={s.id} index={i}><Row s={s} first={i === 0} onPress={() => open(s.id)} /></Appear>)}
             </Card>
           ) : <Text style={[ui.rowSub, { paddingHorizontal: S.xs }]}>Save a few recipes and they show up here, ranked by what you have.</Text>}
 
           <SectionTitle>New ideas</SectionTitle>
           {data.online.length ? (
             <Card style={{ paddingVertical: S.xs }}>
-              {data.online.map((s, i) => <Row key={s.id} s={s} first={i === 0} onPress={() => open(s.id)} />)}
+              {data.online.map((s, i) => <Appear key={s.id} index={i + data.saved.length}><Row s={s} first={i === 0} onPress={() => open(s.id)} /></Appear>)}
             </Card>
           ) : data.pantry_count ? (
             <Empty icon="magnify" title="No matches online" text="The recipe library searches by main ingredients like chicken, beef, rice or eggs. Add a few of those to At home." />

@@ -3,6 +3,7 @@ import { Alert, Pressable, RefreshControl, SectionList, Text, View } from 'react
 import { api, changes, type PantryItem } from '../lib/api';
 import { useList } from '../lib/useList';
 import { AddBar, groupRowStyle } from './ListBits';
+import { animateList } from '../lib/motion';
 import { Chips, Empty, ErrorBar, Field, Icon, Loading, Sheet, styles as ui, tap, useForm } from './ui';
 import { C, S } from '../lib/theme';
 
@@ -33,6 +34,7 @@ export function Pantry() {
     const body = { ...(m && m[1] ? { name: m[1], qty: m[2] } : { name }), location: where };
     try {
       const row = await api<PantryItem>('/api/pantry_items', { method: 'POST', body });
+      animateList();
       setData((d) => [...d, row]);
     } catch { setText(name); }
   }
@@ -40,6 +42,7 @@ export function Pantry() {
   function usedUp(item: PantryItem) {
     tap();
     const go = async (add_to_list: boolean) => {
+      animateList();
       setData((d) => d.filter((i) => i.id !== item.id));
       await api(`/api/pantry_items/${item.id}/used-up`, { method: 'POST', body: { add_to_list } }).catch(reload);
       if (add_to_list) changes.emit('shopping_items');
@@ -59,6 +62,7 @@ export function Pantry() {
   }
   async function remove() {
     if (!edit) return;
+    animateList();
     setData((d) => d.filter((i) => i.id !== edit.id));
     setEdit(null);
     await api(`/api/pantry_items/${edit.id}`, { method: 'DELETE' }).catch(reload);

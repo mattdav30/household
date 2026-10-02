@@ -4,6 +4,7 @@ import { api, changes, type Chore } from '../lib/api';
 import { useList } from '../lib/useList';
 import { useSession } from '../lib/session';
 import { BackHeader } from '../components/BackHeader';
+import { animateList } from '../lib/motion';
 import { Check, Chips, DateField, Empty, ErrorBar, Fab, Field, Icon, Loading, Pill, Sheet, styles as ui, useForm } from '../components/ui';
 import { REPEATS, daysUntil, friendly, repeatLabel, today } from '../lib/dates';
 import { C, R, S } from '../lib/theme';
@@ -34,12 +35,14 @@ export default function Chores() {
   }, [data, filter]);
 
   async function complete(c: Chore) {
+    animateList();
     if (c.done_at) {
       setData((d) => d.map((x) => (x.id === c.id ? { ...x, done_at: null } : x)));
       await api(`/api/chores/${c.id}`, { method: 'PATCH', body: { done_at: null } }).catch(reload);
       return;
     }
     const updated = await api<Chore>(`/api/chores/${c.id}/complete`, { method: 'POST' }).catch(() => null);
+    animateList();
     if (updated) setData((d) => d.map((x) => (x.id === c.id ? updated : x)));
     changes.emit('chores');
   }
