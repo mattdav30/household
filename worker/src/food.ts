@@ -192,3 +192,25 @@ export async function importFromUrl(url: string): Promise<RecipeOut> {
   }
   throw new Error('No recipe found on that page. Try the link to a single recipe.');
 }
+
+// ---------- What we have versus what a recipe needs ----------
+
+/** Things every kitchen has. Counted as at home without being listed. */
+const BASICS = ['water', 'salt', 'pepper', 'black pepper', 'sea salt', 'ice', 'boiling water', 'cold water', 'salt and pepper'];
+export const isBasic = (name: string) => BASICS.includes(nameKey(name).join(' ')) || BASICS.includes(name.trim().toLowerCase());
+
+export type Coverage = { total: number; have: number; listed: number; need: number; missing: string[] };
+
+export function coverage(items: Ingredient[], pantry: string[], listed: string[]): Coverage {
+  const out: Coverage = { total: items.length, have: 0, listed: 0, need: 0, missing: [] };
+  for (const i of items) {
+    if (isBasic(i.name) || pantry.some((p) => sameThing(p, i.name))) out.have++;
+    else if (listed.some((p) => sameThing(p, i.name))) out.listed++;
+    else { out.need++; out.missing.push(i.name); }
+  }
+  return out;
+}
+
+/** Best first: fewest things to buy, then the largest share already at home. */
+export const byReadiness = (a: Coverage, b: Coverage) =>
+  a.need - b.need || b.have / Math.max(b.total, 1) - a.have / Math.max(a.total, 1);

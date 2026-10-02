@@ -4,7 +4,7 @@ import {
   uid, inviteCode, hashPassword, safeEqual, now, localDate, addDays, advance, guessAisle, sendPush, PushMsg,
 } from './lib';
 import { expandEvents } from './recur';
-import { fromMealDb, importFromUrl, mealDb, normIngredients, sameThing, type Ingredient } from './food';
+import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, normIngredients, sameThing, type Ingredient } from './food';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string };
 type User = { id: string; household_id: string; email: string; name: string; color: string };
@@ -288,6 +288,7 @@ app.post('/api/ingredients/check', async (c) => {
     c.env.DB.prepare('SELECT name, qty FROM shopping_items WHERE household_id = ? AND checked = 0').bind(u.household_id),
   ]);
   return c.json(items.map((i) => {
+    if (isBasic(i.name)) return { ...i, status: 'have', match: 'basic' };
     const have = (pantry.results as { name: string; location: string }[]).find((p) => sameThing(p.name, i.name));
     if (have) return { ...i, status: 'have', match: have.name, location: have.location };
     const onList = (listed.results as { name: string }[]).find((p) => sameThing(p.name, i.name));
@@ -302,14 +303,14 @@ app.post('/api/shopping_items/bulk', async (c) => {
   const items = (body.items ?? []).filter((i) => i?.name?.trim());
   const open = (await c.env.DB.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0')
     .bind(u.household_id).all<{ name: string }>()).results;
-  const fresh = items.filter((i) => !open.some((o) => sameThing(o.name, i.name)));
+  const fresh = items.filter((i) => !open.some((o) => sameThing(o.name, i.name))).map((i) => ({ ...i, id: uid('i_') }));
   if (fresh.length) {
     await c.env.DB.batch(fresh.map((i) => c.env.DB.prepare(
       'INSERT INTO shopping_items (id, household_id, name, qty, aisle, checked, added_by, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
-    ).bind(uid('i_'), u.household_id, i.name.trim(), i.qty ?? null, guessAisle(i.name), u.id, i.note ?? null, now(), now())));
+    ).bind(i.id, u.household_id, i.name.trim(), i.qty ?? null, guessAisle(i.name), u.id, i.note ?? null, now(), now())));
     c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} added ${fresh.length} item${fresh.length > 1 ? 's' : ''}`, { table: 'shopping_items' }));
   }
-  return c.json({ added: fresh.length, skipped: items.length - fresh.length });
+  return c.json({ added: fresh.length, skipped: items.length - fresh.length, ids: fresh.map((i) => i.id) });
 });
 
 // ---------- At home ----------
@@ -372,26 +373,98 @@ app.post('/api/bills/:id/paid', async (c) => {
   return c.json(await c.env.DB.prepare('SELECT * FROM bills WHERE id = ?').bind(bill.id).first());
 });
 
-// Add a recipe's ingredients to the shopping list, skipping what we have or have listed already.
+async function homeLists(db: D1Database, householdId: string) {
+  const [pantry, open] = await db.batch([
+    db.prepare('SELECT name, location FROM pantry_items WHERE household_id = ?').bind(householdId),
+    db.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0').bind(householdId),
+  ]);
+  return {
+    pantry: (pantry.results as { name: string; location: string }[]),
+    listed: (open.results as { name: string }[]).map((r) => r.name),
+  };
+}
+
+// Add the ingredients we lack to the shopping list, skipping what we have or have listed already.
 app.post('/api/recipes/:id/to-shopping', async (c) => {
   const u = c.get('user');
+  const body = await c.req.json<{ note?: string }>().catch(() => ({} as { note?: string }));
   const recipe = await c.env.DB.prepare('SELECT * FROM recipes WHERE id = ? AND household_id = ?')
     .bind(c.req.param('id'), u.household_id).first<{ ingredients: string; title: string }>();
   if (!recipe) return bad('Not found.', 404);
   const items = normIngredients(recipe.ingredients);
-  const [pantry, open] = await c.env.DB.batch([
-    c.env.DB.prepare('SELECT name FROM pantry_items WHERE household_id = ?').bind(u.household_id),
-    c.env.DB.prepare('SELECT name FROM shopping_items WHERE household_id = ? AND checked = 0').bind(u.household_id),
-  ]);
-  const known = [...pantry.results, ...open.results] as { name: string }[];
-  const fresh = items.filter((i) => !known.some((k) => sameThing(k.name, i.name)));
+  const { pantry, listed } = await homeLists(c.env.DB, u.household_id);
+  const known = [...pantry.map((p) => p.name), ...listed];
+  const note = body.note?.trim() || recipe.title;
+  const fresh = items.filter((i) => !isBasic(i.name) && !known.some((k) => sameThing(k, i.name))).map((i) => ({ ...i, id: uid('i_') }));
   if (fresh.length) {
     await c.env.DB.batch(fresh.map((i) => c.env.DB.prepare(
       'INSERT INTO shopping_items (id, household_id, name, qty, aisle, checked, added_by, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)',
-    ).bind(uid('i_'), u.household_id, i.name, i.qty, guessAisle(i.name), u.id, recipe.title, now(), now())));
-    c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} added ${fresh.length} items for ${recipe.title}`, { table: 'shopping_items' }));
+    ).bind(i.id, u.household_id, i.name, i.qty, guessAisle(i.name), u.id, note, now(), now())));
+    c.executionCtx.waitUntil(notifyOthers(c.env, u, 'Shopping list', `${u.name} added ${fresh.length} item${fresh.length > 1 ? 's' : ''} for ${note}`, { table: 'shopping_items' }));
   }
-  return c.json({ added: fresh.length });
+  return c.json({ added: fresh.length, ids: fresh.map((i) => i.id), names: fresh.map((i) => i.name) });
+});
+
+// Undo a bulk add: removes those items if nobody has ticked them yet.
+app.post('/api/shopping_items/remove-many', async (c) => {
+  const u = c.get('user');
+  const { ids } = await c.req.json<{ ids?: string[] }>();
+  if (!ids?.length) return c.json({ deleted: 0 });
+  const r = await c.env.DB.prepare(`DELETE FROM shopping_items WHERE household_id = ? AND checked = 0 AND id IN (${ids.map(() => '?').join(',')})`)
+    .bind(u.household_id, ...ids.slice(0, 100)).run();
+  return c.json({ deleted: r.meta.changes });
+});
+
+// How ready each saved recipe is, given what is at home and on the list.
+app.get('/api/recipes/coverage', async (c) => {
+  const u = c.get('user');
+  const recipes = (await c.env.DB.prepare('SELECT id, ingredients FROM recipes WHERE household_id = ?').bind(u.household_id).all<{ id: string; ingredients: string }>()).results;
+  const { pantry, listed } = await homeLists(c.env.DB, u.household_id);
+  const names = pantry.map((p) => p.name);
+  return c.json(Object.fromEntries(recipes.map((r) => [r.id, coverage(normIngredients(r.ingredients), names, listed)])));
+});
+
+// Meal ideas ranked by what we already have: saved recipes first, then online recipes built around what is in the fridge.
+app.get('/api/suggest', async (c) => {
+  const u = c.get('user');
+  const { pantry, listed } = await homeLists(c.env.DB, u.household_id);
+  const names = pantry.map((p) => p.name);
+  const recipes = (await c.env.DB.prepare('SELECT id, title, image_url, ingredients, source, source_id FROM recipes WHERE household_id = ?')
+    .bind(u.household_id).all<{ id: string; title: string; image_url: string | null; ingredients: string; source: string | null; source_id: string | null }>()).results;
+  const saved = recipes
+    .map((r) => ({ id: r.id, title: r.title, image_url: r.image_url, ...coverage(normIngredients(r.ingredients), names, listed) }))
+    .filter((r) => r.total > 0)
+    .sort(byReadiness);
+
+  // Search the online library by the fresh things we have, fridge and freezer first.
+  const order = ['Fridge', 'Freezer', 'Pantry'];
+  const seeds = [...pantry].filter((p) => p.location !== 'Household')
+    .sort((a, b) => order.indexOf(a.location) - order.indexOf(b.location))
+    .map((p) => p.name).slice(0, 5);
+  const savedMealIds = new Set(recipes.filter((r) => r.source === 'mealdb').map((r) => 'mealdb:' + r.source_id));
+  const hits = new Map<string, { n: number; seed: string[] }>();
+  await Promise.all(seeds.map(async (seed) => {
+    try {
+      const data = await mealDb('/filter.php?i=' + encodeURIComponent(seed.toLowerCase().trim().replace(/\s+/g, '_')), c.executionCtx);
+      for (const m of (data.meals ?? []) as { idMeal: string }[]) {
+        const h = hits.get(m.idMeal) ?? { n: 0, seed: [] };
+        h.n++; h.seed.push(seed); hits.set(m.idMeal, h);
+      }
+    } catch { /* one failed search does not stop the rest */ }
+  }));
+  const candidates = [...hits.entries()].filter(([id]) => !savedMealIds.has('mealdb:' + id))
+    .sort((a, b) => b[1].n - a[1].n).slice(0, 12);
+  const online = (await Promise.all(candidates.map(async ([id, h]) => {
+    try {
+      const data = await mealDb('/lookup.php?i=' + id, c.executionCtx);
+      const m = data.meals?.[0];
+      if (!m) return null;
+      const r = fromMealDb(m);
+      return { id: r.id, title: r.title, image_url: r.image_url, category: r.category, uses: h.seed, ...coverage(r.ingredients, names, listed) };
+    } catch { return null; }
+  }))).filter((x): x is NonNullable<typeof x> => !!x).sort(byReadiness);
+
+  return c.json({ saved, online, pantry_count: pantry.length });
 });
 
 // Done shopping: ticked items leave the list and go into At home.

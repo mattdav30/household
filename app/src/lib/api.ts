@@ -86,3 +86,5 @@ export type CalEvent = {
 };
 export type Bill = { id: string; name: string; amount_cents: number | null; due_date: string; repeat: string; last_paid_at: number | null; notes: string | null };
 export type Wish = { id: string; list: string; title: string; url: string | null; price_cents: number | null; for_whom: string | null; added_by: string | null; status: string; notes: string | null };
+export type Coverage = { total: number; have: number; listed: number; need: number; missing: string[] };
+export type Suggestion = Coverage & { id: string; title: string; image_url: string | null; category?: string | null; uses?: string[] };

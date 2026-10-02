@@ -9,6 +9,7 @@ import { ShopSheet } from '../components/ShopSheet';
 import { Button, Card, Field, Icon, Pill, SectionTitle, Sheet, styles as ui } from '../components/ui';
 import { ingredientLine, parseLine, readIngredients } from '../lib/ingredients';
 import { webRecipes } from '../lib/recipeCache';
+import { addMissingFor } from '../lib/autoShop';
 import { friendlyInline, iso } from '../lib/dates';
 import { C, S } from '../lib/theme';
 
@@ -94,9 +95,8 @@ export default function RecipeScreen() {
           const recipeId = await ensureSaved(model);
           await api('/api/meals', { method: 'POST', body: { date: iso(d), slot: 'dinner', title: model.title, recipe_id: recipeId } });
           changes.emit('meals');
-          Alert.alert('Planned', `${model.title} for ${friendlyInline(iso(d))}.`, [
-            { text: 'OK' }, { text: 'Add ingredients to list', onPress: () => setShopOpen(true) },
-          ]);
+          // Planning a recipe puts whatever we lack on the shopping list, with an undo.
+          await addMissingFor(recipeId, `${model.title}, ${friendlyInline(iso(d))}`);
         } catch (err) { Alert.alert('Could not plan', (err as Error).message); }
       },
     });

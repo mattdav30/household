@@ -59,7 +59,7 @@ export default function TodayScreen() {
         </View>
 
         <SectionTitle>Dinner tonight</SectionTitle>
-        <Pressable onPress={() => router.push('/meals')} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
+        <Pressable onPress={() => router.push(dinner ? '/meals' : '/ideas')} accessibilityRole="button" style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
           {dinner?.image_url ? (
             <View style={{ borderRadius: 18, overflow: 'hidden', height: 170, backgroundColor: C.card }}>
               <Image source={{ uri: dinner.image_url }} style={{ position: 'absolute', width: '100%', height: '100%' }} resizeMode="cover" accessible={false} />
@@ -74,7 +74,7 @@ export default function TodayScreen() {
               <IconBadge name="silverware-fork-knife" color={dinner ? C.accent : C.faint} />
               <View style={{ flex: 1 }}>
                 <Text style={[ui.rowTitle, !dinner && { color: C.sub }]}>{dinner ? dinner.title : 'Nothing planned yet'}</Text>
-                {!dinner ? <Text style={ui.rowSub}>Tap to plan or find a recipe</Text> : null}
+                {!dinner ? <Text style={ui.rowSub}>See ideas from what we have</Text> : null}
               </View>
               <Icon name="chevron-right" color={C.faint} />
             </Card>
