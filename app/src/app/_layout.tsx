@@ -6,6 +6,9 @@ import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../lib/session';
 import { listenForChanges, registerForPush } from '../lib/push';
+import { changes } from '../lib/api';
+import { refreshWidgetSoon } from '../widget/refresh';
+import { AppState } from 'react-native';
 import { C, MODE } from '../lib/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -29,6 +32,10 @@ function Gate() {
     if (!profile) return;
     registerForPush();
     const off = listenForChanges();
+    // Keep the home screen widget in step with the app.
+    refreshWidgetSoon(500);
+    const offWidget = changes.on(() => refreshWidgetSoon());
+    const appSub = AppState.addEventListener('change', (st) => { if (st === 'background') refreshWidgetSoon(0); });
     const tapSub = Notifications.addNotificationResponseReceivedListener((r) => {
       const data = r.notification.request.content.data as { table?: string; screen?: string } | undefined;
       const route: Record<string, string> = {
@@ -37,7 +44,7 @@ function Gate() {
       const target = data?.table ? route[data.table] : '/';
       if (target) router.push(target as never);
     });
-    return () => { off(); tapSub.remove(); };
+    return () => { off(); tapSub.remove(); offWidget(); appSub.remove(); };
   }, [profile, router]);
 
   // Hold the screens back until the saved sign in loads, so no screen fetches without a token.

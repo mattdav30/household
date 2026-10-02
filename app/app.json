@@ -4,7 +4,7 @@
     "slug": "household",
     "owner": "metheni",
     "scheme": "household",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -37,6 +37,25 @@
         "expo-notifications",
         {
           "color": "#1F6F5C"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "Today",
+              "label": "Household today",
+              "description": "Today's events, dinner and the shopping count",
+              "minWidth": "250dp",
+              "minHeight": "160dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widget-preview/today.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
         }
       ]
     ],
