@@ -84,9 +84,8 @@ export default function Calendar() {
     setDraft(null); reload(); changes.emit('events');
   }
   const remove = () => {
-    if (form.repeat === 'none') return removeAll();
-    Alert.alert('Delete repeating event', 'This removes every date in the series.', [
-      { text: 'Cancel', style: 'cancel' }, { text: 'Delete all', style: 'destructive', onPress: removeAll },
+    Alert.alert(form.repeat === 'none' ? `Delete ${form.title}?` : 'Delete repeating event?', form.repeat === 'none' ? 'Both phones lose it.' : 'This removes every date in the series.', [
+      { text: 'Cancel', style: 'cancel' }, { text: form.repeat === 'none' ? 'Delete' : 'Delete all', style: 'destructive', onPress: removeAll },
     ]);
   };
   async function skipOne() {
@@ -103,9 +102,9 @@ export default function Calendar() {
     <View style={{ flex: 1 }}>
       <Header eyebrow={String(m.getFullYear())} title={MONTHS[m.getMonth()]} right={
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <HeaderButton icon="chevron-left" onPress={() => setMonth(shiftMonth(month, -1))} />
+          <HeaderButton icon="chevron-left" a11y="Previous month" onPress={() => setMonth(shiftMonth(month, -1))} />
           {!isThisMonth ? <HeaderButton icon="calendar-today" label="Today" onPress={() => { setMonth(today().slice(0, 7) + '-01'); setSelected(today()); }} /> : null}
-          <HeaderButton icon="chevron-right" onPress={() => setMonth(shiftMonth(month, 1))} />
+          <HeaderButton icon="chevron-right" a11y="Next month" onPress={() => setMonth(shiftMonth(month, 1))} />
         </View>
       } />
       <ErrorBar error={error} />
@@ -126,8 +125,9 @@ export default function Calendar() {
                   const items = byDay[d] ?? [];
                   const shown = items.slice(0, 3);
                   return (
-                    <Pressable key={d} onPress={() => setSelected(d)}
-                      style={{ flex: 1, minHeight: 92, borderRightWidth: 1, borderBottomWidth: 1, borderColor: C.line, padding: 2, backgroundColor: isSel ? C.raised : inMonth ? 'transparent' : tint('#000000', 0.12) }}>
+                    <Pressable key={d} onPress={() => setSelected(d)} accessibilityRole="button" accessibilityState={{ selected: isSel }}
+                      accessibilityLabel={`${friendly(d)}${items.length ? `, ${items.length} item${items.length > 1 ? 's' : ''}: ${items.map((c) => c.label).join(', ')}` : ', nothing on'}`}
+                      style={{ flex: 1, minHeight: 92, borderRightWidth: 1, borderBottomWidth: 1, borderColor: C.line, padding: 2, backgroundColor: isSel ? C.raised : inMonth ? 'transparent' : C.bg }}>
                       <View style={{ alignItems: 'center', marginBottom: 2 }}>
                         <View style={{ minWidth: 24, height: 24, borderRadius: 12, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: isToday ? C.accent : 'transparent' }}>
                           <Text style={{ fontSize: 13, fontWeight: isToday || isSel ? '800' : '600', color: isToday ? C.onAccent : inMonth ? C.ink : C.faint }}>{parse(d).getDate()}</Text>
@@ -184,7 +184,7 @@ export default function Calendar() {
 
       <Fab onPress={() => setDraft(blank(selected))} />
 
-      <Sheet visible={!!draft} title={form.id ? 'Edit event' : 'New event'} onClose={() => setDraft(null)} onSave={save} saving={saving} onDelete={form.id ? remove : undefined}
+      <Sheet visible={!!draft} title={form.id ? 'Edit event' : 'New event'} onClose={() => setDraft(null)} onSave={save} saving={saving} onDelete={form.id ? remove : undefined} confirmDelete={false}
         extra={form.id && form.repeat !== 'none' && form.occurrence ? <Button kind="ghost" icon="calendar-remove-outline" title={`Skip ${friendlyInline(form.occurrence)} only`} onPress={skipOne} /> : null}>
         <Field label="What" value={form.title} onChangeText={(v) => set('title', v)} placeholder="e.g. Dinner with friends" />
         <DateField label={form.repeat !== 'none' ? 'First date' : 'Date'} value={form.date} onChange={(v) => v && set('date', v)} />

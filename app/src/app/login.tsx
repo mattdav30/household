@@ -56,11 +56,11 @@ export default function Login() {
         ]} />
 
         {mode !== 'signin' ? <Field label="Your name" value={name} onChangeText={setName} placeholder="Matt" autoCapitalize="words" /> : null}
-        <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+        <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@email.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" autoCorrect={false} />
         <Field label="Password" value={password} onChangeText={setPassword} placeholder="8 or more characters" secureTextEntry autoComplete={mode === 'signin' ? 'password' : 'new-password'} />
         {mode === 'create' ? <Field label="Household name" value={home} onChangeText={setHome} placeholder="Home" /> : null}
         {mode === 'join' ? (
-          <Field label="Invite code" value={code} onChangeText={(t) => setCode(t.toUpperCase())} placeholder="6 letters, from Settings on the other phone" autoCapitalize="characters" maxLength={6} />
+          <Field label="Invite code" value={code} onChangeText={(t) => setCode(t.toUpperCase())} placeholder="6 letters, from Settings on the other phone" autoCapitalize="characters" autoCorrect={false} maxLength={6} />
         ) : null}
 
         {error ? <Text style={{ color: C.danger, fontSize: 14 }}>{error}</Text> : null}

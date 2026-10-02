@@ -95,7 +95,7 @@ export default function Meals() {
                   return (
                     <Pressable key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}
                       onPress={() => setDraft({ id: m.id, date: m.date, slot: m.slot, title: m.title, recipe_id: m.recipe_id, notes: m.notes ?? '' })}>
-                      {r?.image_url ? <Image source={{ uri: r.image_url }} style={{ width: 44, height: 44, borderRadius: 10 }} /> : null}
+                      {r?.image_url ? <Image source={{ uri: r.image_url }} style={{ width: 44, height: 44, borderRadius: 12 }} accessible={false} /> : null}
                       <View style={{ flex: 1 }}>
                         <Text style={ui.rowTitle} numberOfLines={1}>{m.title}</Text>
                         {m.slot !== 'dinner' ? <Text style={ui.rowSub}>{SLOTS[slotOrder(m.slot)]?.label}</Text> : r ? <Text style={ui.rowSub}>Recipe saved</Text> : null}

@@ -13,9 +13,9 @@ type View_ = 'ours' | 'discover';
 
 function RecipeTile({ title, image, sub, onPress }: { title: string; image: string | null; sub?: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.85 : 1 })}>
-      <View style={{ aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: C.raised, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}>
-        {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : <Icon name="silverware-fork-knife" size={34} color={C.faint} />}
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={sub ? `${title}, ${sub}` : title} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.85 : 1 })}>
+      <View style={{ aspectRatio: 1, borderRadius: 18, overflow: 'hidden', backgroundColor: C.raised, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }}>
+        {image ? <Image source={{ uri: image }} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessible={false} /> : <Icon name="silverware-fork-knife" size={34} color={C.faint} />}
       </View>
       <Text style={[ui.rowTitle, { marginTop: 8, fontSize: 15 }]} numberOfLines={2}>{title}</Text>
       {sub ? <Text style={[ui.rowSub, { marginTop: 1 }]} numberOfLines={1}>{sub}</Text> : null}
@@ -119,7 +119,7 @@ export default function Recipes() {
           <View style={{ paddingHorizontal: S.lg, gap: S.sm }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, paddingLeft: S.md }}>
               <Icon name="magnify" color={C.sub} />
-              <TextInput value={q} onChangeText={setQ} placeholder="Search a dish or ingredient, e.g. chicken" placeholderTextColor={C.faint}
+              <TextInput value={q} onChangeText={setQ} placeholder="Search a dish or ingredient, e.g. chicken…" placeholderTextColor={C.faint}
                 returnKeyType="search" onSubmitEditing={() => { setCat(null); search(q, null); }} selectionColor={C.accent}
                 style={{ flex: 1, fontSize: 16, paddingVertical: 13, paddingHorizontal: S.sm, color: C.ink }} />
               {searching ? <ActivityIndicator color={C.accent} style={{ marginRight: S.md }} /> : null}
@@ -151,7 +151,7 @@ export default function Recipes() {
 
       <Sheet visible={importOpen} title="Import a recipe" onClose={() => setImportOpen(false)} onSave={doImport} saving={importing} saveLabel="Import">
         <Text style={ui.rowSub}>Paste the link to a recipe page from sites like RecipeTin Eats, taste.com.au or BBC Good Food. The app pulls in the photo, ingredients and method.</Text>
-        <Field label="Recipe link" value={link} onChangeText={setLink} placeholder="https://" autoCapitalize="none" keyboardType="url" autoFocus />
+        <Field label="Recipe link" value={link} onChangeText={setLink} placeholder="https://…" autoCapitalize="none" autoCorrect={false} keyboardType="url" autoFocus />
       </Sheet>
 
       <Sheet visible={manual} title="New recipe" onClose={() => setManual(false)} onSave={saveManual}>

@@ -17,10 +17,10 @@ function greeting() {
 
 function Tile({ icon, color, label, value, onPress }: { icon: IconName; color: string; label: string; value: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [ui.card, { flex: 1, gap: 10, padding: 14, opacity: pressed ? 0.85 : 1 }]}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${value} ${label}`} style={({ pressed }) => [ui.card, { flex: 1, gap: 10, padding: 14, opacity: pressed ? 0.85 : 1 }]}>
       <IconBadge name={icon} color={color} size={36} />
       <View>
-        <Text style={{ fontSize: 24, fontWeight: '800', color: C.ink, letterSpacing: -0.5 }} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        <Text style={[ui.num, { fontSize: 24, fontWeight: '800', color: C.ink, letterSpacing: -0.5 }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
         <Text style={{ fontSize: 13, color: C.sub, marginTop: 2 }}>{label}</Text>
       </View>
     </Pressable>
@@ -62,7 +62,7 @@ export default function TodayScreen() {
         <Pressable onPress={() => router.push('/meals')} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
           {dinner?.image_url ? (
             <View style={{ borderRadius: 18, overflow: 'hidden', height: 170, backgroundColor: C.card }}>
-              <Image source={{ uri: dinner.image_url }} style={{ position: 'absolute', width: '100%', height: '100%' }} resizeMode="cover" />
+              <Image source={{ uri: dinner.image_url }} style={{ position: 'absolute', width: '100%', height: '100%' }} resizeMode="cover" accessible={false} />
               <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 90, backgroundColor: 'rgba(0,0,0,0.55)' }} />
               <View style={{ position: 'absolute', left: 16, right: 16, bottom: 14 }}>
                 <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 1, opacity: 0.8 }}>TONIGHT</Text>
@@ -107,7 +107,7 @@ export default function TodayScreen() {
                 <View key={c.id}>
                   {i ? <View style={ui.sep} /> : null}
                   <View style={ui.row}>
-                    <Check on={false} onPress={() => complete(c)} color={c.assignee_id ? memberColor(c.assignee_id) : C.accent} />
+                    <Check on={false} onPress={() => complete(c)} label={`Done: ${c.title}`} color={c.assignee_id ? memberColor(c.assignee_id) : C.accent} />
                     <View style={{ flex: 1 }}>
                       <Text style={ui.rowTitle}>{c.title}</Text>
                       <Text style={[ui.rowSub, c.due_date && daysUntil(c.due_date) < 0 && { color: C.warm }]}>

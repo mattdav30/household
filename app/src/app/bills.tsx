@@ -68,8 +68,8 @@ export default function Bills() {
                     {status ? <Pill {...status} /> : null}
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '700', color: C.ink }}>{money(item.amount_cents)}</Text>
-                    <Pressable onPress={() => confirmPaid(item)} hitSlop={8} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: C.accent }}>
+                    <Text style={[ui.num, { fontSize: 18, fontWeight: '800', color: C.ink }]}>{money(item.amount_cents)}</Text>
+                    <Pressable onPress={() => confirmPaid(item)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Mark ${item.name} paid`} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: C.accent }}>
                       <Text style={{ color: C.accent, fontWeight: '600', fontSize: 13 }}>Paid</Text>
                     </Pressable>
                   </View>

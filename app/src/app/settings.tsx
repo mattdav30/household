@@ -77,7 +77,7 @@ export default function Settings() {
         <SectionTitle>App</SectionTitle>
         <Card style={{ gap: S.md }}>
           <Text style={ui.rowSub}>Version {Constants.expoConfig?.version}{Updates.updateId ? ` · update ${Updates.updateId.slice(0, 8)}` : ''}</Text>
-          <Text style={[ui.rowSub, { fontSize: 11 }]}>Updates {Updates.isEnabled ? 'on' : 'off'} · channel {Updates.channel ?? 'none'} · runtime {Updates.runtimeVersion ?? 'none'} · {Updates.isEmbeddedLaunch ? 'built in' : 'downloaded'}</Text>
+          <Text style={[ui.rowSub, { fontSize: 11 }]}>Updates {Updates.isEnabled ? 'on' : 'off'}, channel {Updates.channel ?? 'none'}, runtime {Updates.runtimeVersion ?? 'none'}, {Updates.isEmbeddedLaunch ? 'built-in code' : 'downloaded update'}</Text>
           <Button kind="ghost" icon="cloud-download-outline" title="Check for updates" onPress={checkUpdate} />
           {updateMsg ? <Text style={[ui.rowSub, { textAlign: 'center' }]}>{updateMsg}</Text> : null}
           <View style={ui.sep} />

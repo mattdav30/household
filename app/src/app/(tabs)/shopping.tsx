@@ -85,7 +85,7 @@ export default function Shopping() {
 
       <View style={{ paddingHorizontal: S.lg, paddingBottom: S.md, gap: S.md }}>
         <Segmented value={view} onChange={setView} options={[{ value: 'buy', label: 'To buy' }, { value: 'home', label: 'At home' }]} />
-        {view === 'buy' ? <AddBar value={text} onChange={setText} onSubmit={add} placeholder="Add an item, e.g. Milk 2L" /> : null}
+        {view === 'buy' ? <AddBar value={text} onChange={setText} onSubmit={add} placeholder="Add an item, e.g. Milk 2L…" /> : null}
       </View>
 
       {view === 'home' ? <Pantry /> : (
@@ -106,7 +106,7 @@ export default function Shopping() {
                 <View style={groupRowStyle(index, section.data.length)}>
                   {index ? <View style={ui.sep} /> : null}
                   <View style={ui.row}>
-                    <Check on={!!item.checked} onPress={() => toggle(item)} />
+                    <Check on={!!item.checked} onPress={() => toggle(item)} label={item.name} />
                     <Pressable style={{ flex: 1 }} onPress={() => setEdit(item)}>
                       <Text style={[ui.rowTitle, !!item.checked && { color: C.faint, textDecorationLine: 'line-through' }]}>{item.name}</Text>
                       {item.qty || item.note ? <Text style={ui.rowSub}>{[item.qty, item.note ? `for ${item.note}` : null].filter(Boolean).join(' · ')}</Text> : null}

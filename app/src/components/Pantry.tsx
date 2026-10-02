@@ -67,7 +67,7 @@ export function Pantry() {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ paddingHorizontal: S.lg, gap: S.sm, paddingBottom: S.sm }}>
-        <AddBar value={text} onChange={setText} onSubmit={add} placeholder={`Add to ${where.toLowerCase()}, e.g. Eggs 12`} />
+        <AddBar value={text} onChange={setText} onSubmit={add} placeholder={`Add to ${where.toLowerCase()}, e.g. Eggs 12…`} />
         <Chips value={where} onChange={setWhere} options={LOCATIONS.map((l) => ({ value: l, label: l }))} />
       </View>
       <ErrorBar error={error} />
@@ -94,7 +94,7 @@ export function Pantry() {
                   <Text style={ui.rowTitle}>{item.name}</Text>
                   {item.qty ? <Text style={ui.rowSub}>{item.qty}</Text> : null}
                 </Pressable>
-                <Pressable onPress={() => usedUp(item)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: C.raised }}>
+                <Pressable onPress={() => usedUp(item)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${item.name} used up`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: C.raised }}>
                   <Icon name="minus-circle-outline" size={16} color={C.sub} />
                   <Text style={{ color: C.sub, fontWeight: '700', fontSize: 13 }}>Used up</Text>
                 </Pressable>

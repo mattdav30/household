@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text,
+  AccessibilityInfo, ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text,
   TextInput, View, type TextInputProps, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,7 +32,7 @@ export function Header({ title, eyebrow, subtitle, right }: { title: string; eye
     <View style={[styles.header, { paddingTop: insets.top + S.lg }]}>
       <View style={{ flex: 1 }}>
         {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        <Text style={styles.h1}>{title}</Text>
+        <Text style={styles.h1} accessibilityRole="header" numberOfLines={2}>{title}</Text>
         {subtitle ? <Text style={styles.headerSub}>{subtitle}</Text> : null}
       </View>
       {right}
@@ -53,18 +53,19 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   );
 }
 
-export function Check({ on, onPress, color = C.accent }: { on: boolean; onPress: () => void; color?: string }) {
+export function Check({ on, onPress, color = C.accent, label }: { on: boolean; onPress: () => void; color?: string; label?: string }) {
   return (
-    <Pressable hitSlop={10} onPress={() => { tap(); onPress(); }} style={[styles.check, on && { backgroundColor: color, borderColor: color }]}>
+    <Pressable hitSlop={10} onPress={() => { tap(); onPress(); }} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={label}
+      style={({ pressed }) => [styles.check, on && { backgroundColor: color, borderColor: color }, { transform: [{ scale: pressed ? 0.88 : 1 }] }]}>
       {on ? <Icon name="check" size={16} color={C.onAccent} /> : null}
     </Pressable>
   );
 }
 
-export function Fab({ onPress, icon = 'plus' }: { onPress: () => void; icon?: IconName }) {
+export function Fab({ onPress, icon = 'plus', label = 'Add' }: { onPress: () => void; icon?: IconName; label?: string }) {
   const insets = useSafeAreaInsets();
   return (
-    <Pressable onPress={() => { tap(); onPress(); }} style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 20, transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
+    <Pressable onPress={() => { tap(); onPress(); }} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 20, transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
       <Icon name={icon} size={28} color={C.onAccent} />
     </Pressable>
   );
@@ -80,8 +81,23 @@ export function Empty({ icon, title, text }: { icon: IconName; title: string; te
   );
 }
 
-export function Loading() {
-  return <View style={styles.empty}><ActivityIndicator color={C.accent} /></View>;
+/** Placeholder rows shaped like the list that is loading. Static, so it respects reduced motion. */
+export function Loading({ rows = 5 }: { rows?: number }) {
+  return (
+    <View style={{ paddingHorizontal: S.lg, paddingTop: S.lg }} accessibilityLabel="Loading…" accessibilityRole="progressbar">
+      <View style={[styles.card, { paddingVertical: S.xs }]}>
+        {Array.from({ length: rows }, (_, i) => (
+          <View key={i} style={[styles.row, i ? { borderTopWidth: 1, borderTopColor: C.line } : null]}>
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.raised }} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={{ height: 12, width: `${55 + ((i * 17) % 35)}%`, borderRadius: 6, backgroundColor: C.raised }} />
+              <View style={{ height: 10, width: '30%', borderRadius: 5, backgroundColor: C.raised, opacity: 0.6 }} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 }
 
 export function ErrorBar({ error }: { error: string | null }) {
@@ -99,7 +115,7 @@ export function Button({ title, onPress, kind = 'primary', busy, icon }: {
   const bg = kind === 'primary' ? C.accent : kind === 'soft' ? C.accentSoft : 'transparent';
   const fg = kind === 'primary' ? C.onAccent : kind === 'danger' ? C.danger : C.accent;
   return (
-    <Pressable disabled={busy} onPress={onPress} style={({ pressed }) => [styles.btn, { backgroundColor: bg, opacity: pressed || busy ? 0.75 : 1 }]}>
+    <Pressable disabled={busy} onPress={onPress} accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ busy: !!busy }} style={({ pressed }) => [styles.btn, { backgroundColor: bg, opacity: pressed || busy ? 0.75 : 1 }]}>
       {busy ? <ActivityIndicator color={fg} /> : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {icon ? <Icon name={icon} size={19} color={fg} /> : null}
@@ -111,9 +127,9 @@ export function Button({ title, onPress, kind = 'primary', busy, icon }: {
 }
 
 /** Small rounded text button for headers. */
-export function HeaderButton({ icon, label, onPress }: { icon: IconName; label?: string; onPress: () => void }) {
+export function HeaderButton({ icon, label, onPress, a11y }: { icon: IconName; label?: string; onPress: () => void; a11y?: string }) {
   return (
-    <Pressable onPress={() => { tap(); onPress(); }} hitSlop={8} style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }, !label && { paddingHorizontal: 10 }]}>
+    <Pressable onPress={() => { tap(); onPress(); }} hitSlop={8} accessibilityRole="button" accessibilityLabel={a11y ?? label} style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.7 : 1 }, !label && { paddingHorizontal: 10 }]}>
       <Icon name={icon} size={19} color={C.accent} />
       {label ? <Text style={{ color: C.accent, fontWeight: '700', fontSize: 14 }}>{label}</Text> : null}
     </Pressable>
@@ -143,7 +159,8 @@ export function Chips<T extends string>({ label, value, options, onChange }: {
             ? { backgroundColor: tint(o.color, 0.2), borderColor: o.color }
             : { backgroundColor: C.accent, borderColor: C.accent };
           return (
-            <Pressable key={o.value} onPress={() => { tap(); onChange(o.value); }} style={[styles.chip, style]}>
+            <Pressable key={o.value} onPress={() => { tap(); onChange(o.value); }} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={o.label.trim() || o.color}
+              style={({ pressed }) => [styles.chip, style, pressed && { opacity: 0.75 }]}>
               {o.color ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: o.color }} /> : null}
               <Text style={[styles.chipText, on && { color: o.color ? C.ink : C.onAccent, fontWeight: '700' }]}>{o.label}</Text>
             </Pressable>
@@ -157,11 +174,12 @@ export function Chips<T extends string>({ label, value, options, onChange }: {
 /** Two to four options in a pill track, for switching views. */
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
   return (
-    <View style={styles.segTrack}>
+    <View style={styles.segTrack} accessibilityRole="tablist">
       {options.map((o) => {
         const on = o.value === value;
         return (
-          <Pressable key={o.value} onPress={() => { tap(); onChange(o.value); }} style={[styles.segItem, on && styles.segOn]}>
+          <Pressable key={o.value} onPress={() => { tap(); onChange(o.value); }} accessibilityRole="tab" accessibilityState={{ selected: on }}
+            style={({ pressed }) => [styles.segItem, on && styles.segOn, pressed && !on && { opacity: 0.7 }]}>
             <Text style={[styles.segText, on && { color: C.ink }]}>{o.label}</Text>
           </Pressable>
         );
@@ -179,7 +197,7 @@ export function Swatches({ label, value, colors, onChange }: { label: string; va
         {colors.map((c) => {
           const on = c.value === value;
           return (
-            <Pressable key={c.value} accessibilityLabel={c.label} onPress={() => { tap(); onChange(c.value); }}
+            <Pressable key={c.value} accessibilityLabel={`${c.label} colour`} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => { tap(); onChange(c.value); }}
               style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: on ? C.ink : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c.value, alignItems: 'center', justifyContent: 'center' }}>
                 {on ? <Icon name="check" size={16} color="#0B0F0E" /> : null}
@@ -204,12 +222,12 @@ export function DateField({ label, value, onChange, optional, placeholder = 'Pic
     <View style={{ gap: 6, flex: 1 }}>
       <Text style={styles.label}>{label}</Text>
       <View style={{ flexDirection: 'row', gap: S.sm }}>
-        <Pressable onPress={open} style={[styles.input, { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+        <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={`${label}: ${value ? friendly(value) : placeholder}`} style={[styles.input, { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
           <Icon name="calendar-blank-outline" size={18} color={C.sub} />
           <Text style={{ color: value ? C.ink : C.faint, fontSize: 16 }}>{value ? friendly(value) : placeholder}</Text>
         </Pressable>
         {optional && value ? (
-          <Pressable onPress={() => onChange(null)} style={[styles.input, { justifyContent: 'center' }]}>
+          <Pressable onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel={`Clear ${label.toLowerCase()}`} style={[styles.input, { justifyContent: 'center' }]}>
             <Icon name="close" size={18} color={C.sub} />
           </Pressable>
         ) : null}
@@ -233,12 +251,12 @@ export function TimeField({ label, value, onChange }: { label: string; value: st
     <View style={{ gap: 6, flex: 1 }}>
       <Text style={styles.label}>{label}</Text>
       <View style={{ flexDirection: 'row', gap: S.sm }}>
-        <Pressable onPress={open} style={[styles.input, { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+        <Pressable onPress={open} accessibilityRole="button" accessibilityLabel={`${label}: ${value ? time12(value) : 'All day'}`} style={[styles.input, { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
           <Icon name="clock-outline" size={18} color={C.sub} />
           <Text style={{ color: value ? C.ink : C.faint, fontSize: 16 }}>{value ? time12(value) : 'All day'}</Text>
         </Pressable>
         {value ? (
-          <Pressable onPress={() => onChange(null)} style={[styles.input, { justifyContent: 'center' }]}>
+          <Pressable onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel={`Clear ${label.toLowerCase()}`} style={[styles.input, { justifyContent: 'center' }]}>
             <Icon name="close" size={18} color={C.sub} />
           </Pressable>
         ) : null}
@@ -248,20 +266,26 @@ export function TimeField({ label, value, onChange }: { label: string; value: st
 }
 
 /** Bottom sheet used for every add and edit form. */
-export function Sheet({ visible, title, onClose, onSave, onDelete, saving, children, saveLabel = 'Save', extra }: {
+export function Sheet({ visible, title, onClose, onSave, onDelete, saving, children, saveLabel = 'Save', extra, confirmDelete = true }: {
   visible: boolean; title: string; onClose: () => void; onSave?: () => void; onDelete?: () => void;
-  saving?: boolean; children: ReactNode; saveLabel?: string; extra?: ReactNode;
+  saving?: boolean; children: ReactNode; saveLabel?: string; extra?: ReactNode; confirmDelete?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
+  const del = onDelete && (confirmDelete
+    ? () => Alert.alert('Delete this?', 'Both phones lose it. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: onDelete },
+    ])
+    : onDelete);
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + S.lg }]}>
           <View style={styles.grabber} />
           <View style={styles.sheetHead}>
-            <Text style={styles.h2}>{title}</Text>
-            <Pressable hitSlop={12} onPress={onClose} style={styles.closeBtn}><Icon name="close" size={20} color={C.sub} /></Pressable>
+            <Text style={[styles.h2, { flex: 1 }]} accessibilityRole="header" numberOfLines={1}>{title}</Text>
+            <Pressable hitSlop={12} onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close"><Icon name="close" size={20} color={C.sub} /></Pressable>
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: S.lg, paddingBottom: S.md }}>
             {children}
@@ -269,12 +293,23 @@ export function Sheet({ visible, title, onClose, onSave, onDelete, saving, child
           <View style={{ gap: S.xs, paddingTop: S.sm }}>
             {onSave ? <Button title={saveLabel} onPress={onSave} busy={saving} /> : null}
             {extra}
-            {onDelete ? <Button title="Delete" kind="danger" onPress={onDelete} /> : null}
+            {del ? <Button title="Delete" kind="danger" onPress={del} /> : null}
           </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
+}
+
+/** True when the phone's Remove animations setting is on. */
+export function useReduceMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => undefined);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => sub.remove();
+  }, []);
+  return reduce;
 }
 
 /** Small helper for form state inside sheets. */
@@ -326,4 +361,5 @@ export const styles = StyleSheet.create({
   rowSub: { fontSize: 13, color: C.sub, marginTop: 3 },
   sep: { height: 1, backgroundColor: C.line },
   list: { paddingHorizontal: S.lg, paddingBottom: 120 },
+  num: { fontVariant: ['tabular-nums'] },
 });

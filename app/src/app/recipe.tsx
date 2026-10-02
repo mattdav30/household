@@ -136,9 +136,9 @@ export default function RecipeScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
         {model.image_url ? (
           <View style={{ height: 300, backgroundColor: C.card }}>
-            <Image source={{ uri: model.image_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            <Image source={{ uri: model.image_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessibilityLabel={`Photo of ${model.title}`} />
             <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, backgroundColor: 'rgba(0,0,0,0.45)' }} />
-            <Pressable onPress={() => router.back()} hitSlop={10}
+            <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back"
               style={{ position: 'absolute', top: insets.top + 10, left: 14, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="chevron-left" color="#fff" size={26} />
             </Pressable>
@@ -206,11 +206,11 @@ export default function RecipeScreen() {
 
       <ShopSheet visible={shopOpen} items={model.ingredients} note={model.title} onClose={() => setShopOpen(false)} />
 
-      <Sheet visible={editOpen} title="Edit recipe" onClose={() => setEditOpen(false)} onSave={saveEdit} onDelete={remove}>
+      <Sheet visible={editOpen} title="Edit recipe" onClose={() => setEditOpen(false)} onSave={saveEdit} onDelete={remove} confirmDelete={false}>
         <Field label="Name" value={form.title} onChangeText={(v) => setForm((f) => ({ ...f, title: v }))} />
         <Field label="Ingredients, one per line" value={form.ingredients} onChangeText={(v) => setForm((f) => ({ ...f, ingredients: v }))} multiline style={{ minHeight: 160 }} />
         <Field label="Method" value={form.instructions} onChangeText={(v) => setForm((f) => ({ ...f, instructions: v }))} multiline />
-        <Field label="Link" value={form.url} onChangeText={(v) => setForm((f) => ({ ...f, url: v }))} autoCapitalize="none" keyboardType="url" />
+        <Field label="Link" value={form.url} onChangeText={(v) => setForm((f) => ({ ...f, url: v }))} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
       </Sheet>
     </View>
   );

@@ -86,7 +86,7 @@ export default function Chores() {
             }}>
               {index ? <View style={ui.sep} /> : null}
               <View style={ui.row}>
-                <Check on={!!item.done_at} onPress={() => complete(item)} color={item.assignee_id ? memberColor(item.assignee_id) : C.accent} />
+                <Check on={!!item.done_at} onPress={() => complete(item)} label={item.title} color={item.assignee_id ? memberColor(item.assignee_id) : C.accent} />
                 <Pressable style={{ flex: 1 }} onPress={() => setDraft({ id: item.id, title: item.title, assignee_id: item.assignee_id ?? '', due_date: item.due_date, repeat: item.repeat, notes: item.notes ?? '' })}>
                   <Text style={[ui.rowTitle, !!item.done_at && { color: C.faint, textDecorationLine: 'line-through' }]}>{item.title}</Text>
                   <Text style={ui.rowSub}>{[item.due_date ? friendly(item.due_date) : null, memberName(item.assignee_id)].filter(Boolean).join(' · ')}</Text>

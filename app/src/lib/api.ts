@@ -43,7 +43,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && token && path.startsWith('/api/')) onUnauthorized?.();
-    throw new ApiError(data.error ?? 'Something went wrong.', res.status);
+    throw new ApiError(data.error ?? 'Something went wrong. Pull down to try again.', res.status);
   }
   return data as T;
 }
