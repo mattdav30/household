@@ -20,7 +20,7 @@ A second Android app in `fitness/` for working out together before the wedding. 
 * The API lives in `worker/src/fitness.ts`, with tables from `worker/migrations/0004_fitness.sql`.
 * Progress photos stay on each phone in the app's private folder. They never reach the server.
 * Reminders are scheduled on the phone, so the app needs no Firebase setup.
-* Builds run on Expo: project `road-to-tokyo`, linked to this repository with base directory `fitness`.
+* Builds run on Expo: project `roadtotokyo`, linked to this repository with base directory `fitness`.
 
 ## Everyday use
 
