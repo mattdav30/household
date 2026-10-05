@@ -21,7 +21,7 @@ const greeting = () => {
 
 export default function Home() {
   const router = useRouter();
-  const { summary, error, weather, refresh, apply, planInput, name, color, partner } = useStore();
+  const { summary, error, weather, refresh, apply, planInput, name, color, partner, steps, imported, clearImported } = useStore();
   const [refreshing, setRefreshing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
@@ -34,6 +34,13 @@ export default function Home() {
   }, [planInput]);
 
   useEffect(() => { if (!said) return; const t = setTimeout(() => setSaid(null), 5000); return () => clearTimeout(t); }, [said]);
+  // Celebrate sessions that arrive from Samsung Health.
+  useEffect(() => {
+    if (!imported) return;
+    setSaid(`Samsung Health sent over ${imported} ${imported === 1 ? 'session' : 'sessions'}. Thank you!`);
+    setParty((n) => n + 1);
+    clearImported();
+  }, [imported, clearImported]);
   const onRefresh = useCallback(async () => { setRefreshing(true); await refresh(); setRefreshing(false); }, [refresh]);
 
   if (!summary || !plan) {
@@ -166,6 +173,12 @@ export default function Home() {
                 <View style={{ flex: 1 }}><Button title="Log other" kind="soft" icon="plus" onPress={() => setLogging(true)} /></View>
               </View>
               {swapped ? <Text style={{ color: C.gold, fontSize: 13 }}>{swapped}</Text> : session.note && session.outdoor ? <Text style={{ color: C.sub, fontSize: 13 }}>{session.note}</Text> : null}
+              {steps != null ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="shoe-print" size={16} color={C.green} />
+                  <Text style={{ color: C.sub, fontSize: 13 }}><Text style={{ color: C.ink, fontWeight: '700' }}>{steps.toLocaleString()}</Text> steps today from Samsung Health</Text>
+                </View>
+              ) : null}
               {weather ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Icon name={weatherIcon(weather) as never} size={16} color={C.faint} />

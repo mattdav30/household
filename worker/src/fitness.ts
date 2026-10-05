@@ -249,6 +249,31 @@ export function registerFitness(app: App) {
     return c.json({ ids, summary: await summary(c.env, u) }, 201);
   });
 
+  // Sessions read from Health Connect on the phone (Samsung Health and others). Each one imports once.
+  app.post('/api/fit/import', async (c) => {
+    const u = c.get('user');
+    const b = await c.req.json<{ sessions?: { external_id?: string; date?: string; minutes?: number; kind?: string; title?: string; source?: string; start_ms?: number; end_ms?: number }[] }>();
+    const rows = (b.sessions ?? []).filter((x) => typeof x.external_id === 'string' && x.external_id.length <= 200
+      && /^\d{4}-\d{2}-\d{2}$/.test(x.date ?? '') && Number(x.minutes) >= 1 && Number(x.minutes) <= 600).slice(0, 200);
+    // Skip a session when the person already logged something by hand around the same time,
+    // so a walk logged in Tandem and tracked by the watch counts once.
+    const manual = (await c.env.DB.prepare('SELECT date, created_at FROM fit_workouts WHERE user_id = ? AND source IS NULL AND date >= ?')
+      .bind(u.id, rows.reduce((m, x) => (x.date! < m ? x.date! : m), '9999-12-31')).all<{ date: string; created_at: number }>()).results;
+    const fresh = rows.filter((x) => !(x.start_ms && x.end_ms && manual.some((m) => m.date === x.date
+      && m.created_at >= x.start_ms! - 10 * 60000 && m.created_at <= x.end_ms! + 60 * 60000)));
+    let added = 0;
+    if (fresh.length) {
+      const res = await c.env.DB.batch(fresh.map((x) => c.env.DB.prepare(
+        `INSERT OR IGNORE INTO fit_workouts (id, household_id, user_id, group_id, date, minutes, kind, title, effort, together, notes, created_at, source, external_id)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 2, 0, NULL, ?, ?, ?)`,
+      ).bind(uid('fw_'), u.household_id, u.id, x.date, Math.round(Number(x.minutes)),
+        (KINDS as readonly string[]).includes(x.kind ?? '') ? x.kind : 'other', (x.title ?? '').trim().slice(0, 80) || 'Workout',
+        now(), (x.source ?? 'health').slice(0, 40), x.external_id)));
+      added = res.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+    }
+    return c.json({ added, summary: await summary(c.env, u) });
+  });
+
   // Deleting one row of a shared session removes both people's rows.
   app.delete('/api/fit/workouts/:id', async (c) => {
     const u = c.get('user');

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +9,10 @@ import { local } from '../lib/local';
 import { EQUIPMENT, type Equip } from '../lib/exercises';
 import { C, MODE, S, setMode } from '../lib/theme';
 import { ensurePermission } from '../lib/notify';
+import { connectHealth, healthState, openHealthSettings, type HealthState } from '../lib/health';
 import { Card, Chips, DateField, Field, Icon, SectionTitle, Swatches, Button, styles as ui, tap } from '../components/ui';
 import { PET_COLORS, PET_KINDS } from '../components/Pet';
-import { Pet3D } from '../components/pet3d/Pet3D';
+import { Pet3D, pet3dStatus } from '../components/pet3d/Pet3D';
 
 export default function Settings() {
   const router = useRouter();
@@ -22,6 +23,31 @@ export default function Settings() {
   const [voice, setVoice] = useState(local.voice());
   const [petName, setPetName] = useState(summary?.settings.pet_name ?? '');
   const [countdown, setCountdown] = useState(summary?.settings.countdown_label ?? '');
+  const { syncNow } = useStore();
+  const [hState, setHState] = useState<HealthState>('unsupported');
+  const [healthOn, setHealthOn] = useState(local.health());
+  const [healthMsg, setHealthMsg] = useState<string | null>(null);
+  useEffect(() => { healthState().then(setHState); }, []);
+  // Fill the text fields once the data arrives.
+  const petNameSaved = summary?.settings.pet_name ?? '';
+  const countdownSaved = summary?.settings.countdown_label ?? '';
+  useEffect(() => { setPetName(petNameSaved); }, [petNameSaved]);
+  useEffect(() => { setCountdown(countdownSaved); }, [countdownSaved]);
+  const [status3d, setStatus3d] = useState(pet3dStatus);
+  useEffect(() => { const t = setInterval(() => setStatus3d(pet3dStatus), 1500); return () => clearInterval(t); }, []);
+  const toggleHealth = async (on: boolean) => {
+    tap();
+    if (!on) { local.setHealth(false); setHealthOn(false); setHealthMsg(null); return; }
+    if (hState !== 'ready') { openHealthSettings(); return; }
+    try {
+      const ok = await connectHealth();
+      setHealthOn(ok);
+      if (!ok) { setHealthMsg('Allow Steps and Exercise in the Health Connect screen to turn this on.'); return; }
+      setHealthMsg('Connected. Syncing now…');
+      const added = await syncNow();
+      setHealthMsg(added ? `Connected. Added ${added} ${added === 1 ? 'session' : 'sessions'} from the last two weeks.` : 'Connected. New walks and workouts will appear as Samsung Health records them.');
+    } catch (e) { setHealthMsg((e as Error).message); }
+  };
 
   if (!summary) return null;
   const me = summary.members.find((m) => m.id === summary.me)!;
@@ -62,10 +88,25 @@ export default function Settings() {
         <Toggle title="Light theme" sub="Restarts the app" value={MODE === 'light'} onChange={(v) => setMode(v ? 'light' : 'dark')} />
       </Card>
 
+      <SectionTitle>Samsung Health</SectionTitle>
+      <Card style={{ gap: S.md }}>
+        <Toggle title="Sync with Samsung Health" sub="Walks and workouts it records log here on their own, plus today's steps" value={healthOn} onChange={toggleHealth} />
+        {hState === 'unsupported' ? <Text style={{ color: C.sub, fontSize: 13 }}>Available on Android phones.</Text> : null}
+        {hState === 'install' || hState === 'update' ? (
+          <Text style={{ color: C.gold, fontSize: 13 }}>{hState === 'install' ? 'Install Health Connect from the Play Store first, then come back.' : 'Update Health Connect from the Play Store first, then come back.'}</Text>
+        ) : null}
+        {healthMsg ? <Text style={{ color: C.sub, fontSize: 13 }}>{healthMsg}</Text> : null}
+        <Text style={{ color: C.faint, fontSize: 12, lineHeight: 18 }}>
+          In Samsung Health, open Settings, then Health Connect, and turn on sharing for Steps and Exercise. On phones without Samsung Health, any app that shares to Health Connect works too.
+        </Text>
+        {healthOn ? <Button title="Sync now" kind="soft" icon="sync" onPress={async () => { tap(); const n = await syncNow(); setHealthMsg(n ? `Added ${n} new ${n === 1 ? 'session' : 'sessions'}.` : 'Up to date.'); }} /> : null}
+      </Card>
+
       <SectionTitle>Your pet</SectionTitle>
       <Card style={{ gap: S.lg }}>
         <View style={{ alignItems: 'center' }}>
           <Pet3D kind={summary.settings.pet_kind} color={summary.settings.pet_color} mood="happy" stage={summary.pet.stage} size={170} sleepy={false} />
+          <Text style={{ color: C.faint, fontSize: 11 }}>3D: {status3d}</Text>
         </View>
         <Field label="Name" value={petName} onChangeText={setPetName} maxLength={24}
           onEndEditing={() => petName.trim() && save('/api/fit/settings', { pet_name: petName.trim() })} />

@@ -35,6 +35,11 @@ export const local = {
     const t = new Date(y, m - 1, d + 7);
     write('rtt_stepup', `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`);
   },
+  /** Samsung Health sync through Health Connect. */
+  health: () => read('rtt_health') === '1',
+  setHealth: (on: boolean) => write('rtt_health', on ? '1' : null),
+  healthSynced: () => Number(read('rtt_health_at') ?? 0),
+  setHealthSynced: (ms: number) => write('rtt_health_at', String(ms)),
   summaryCache: () => read('rtt_summary'),
   setSummaryCache: (json: string) => { if (json.length < 1900) write('rtt_summary', json); },
 };

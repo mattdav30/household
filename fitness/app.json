@@ -4,7 +4,7 @@
     "slug": "tandem",
     "owner": "metheni",
     "scheme": "tandem",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -20,7 +20,9 @@
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM",
         "CAMERA",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_EXERCISE"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
@@ -68,6 +70,23 @@
               "updatePeriodMillis": 1800000
             }
           ]
+        }
+      ],
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Tandem lets you add progress photos from your gallery. They stay on this phone.",
+          "cameraPermission": "Tandem uses the camera for your private progress photos.",
+          "microphonePermission": false
         }
       ]
     ],

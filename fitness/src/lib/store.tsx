@@ -7,6 +7,7 @@ import type { Equip } from './exercises';
 import type { PlanInput } from './plan';
 import { scheduleReminders } from './notify';
 import { refreshWidgetSoon } from '../widget/refresh';
+import { syncHealth } from './health';
 
 type Ctx = {
   summary: Summary | null;
@@ -18,6 +19,10 @@ type Ctx = {
   name: (id: string | null | undefined) => string;
   color: (id: string | null | undefined) => string;
   partner: Summary['members'][number] | null;
+  steps: number | null;
+  imported: number;
+  clearImported: () => void;
+  syncNow: () => Promise<number | null>;
 };
 
 const StoreCtx = createContext<Ctx>(null as unknown as Ctx);
@@ -28,6 +33,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [weather, setWeather] = useState<Weather | null>(null);
+  const [steps, setSteps] = useState<number | null>(null);
+  const [imported, setImported] = useState(0);
 
   const apply = useCallback((s: Summary) => {
     setSummary(s);
@@ -36,9 +43,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     refreshWidgetSoon();
   }, []);
 
+  // Pulls in anything Samsung Health recorded, then loads the latest summary.
+  const syncNow = useCallback(async () => {
+    const r = await syncHealth();
+    if (!r) return null;
+    if (r.steps != null) setSteps(r.steps);
+    if (r.added) setImported(r.added);
+    if (r.summary) apply(r.summary);
+    return r.added;
+  }, [apply]);
+
   const refresh = useCallback(async () => {
     try { apply(await api<Summary>('/api/fit/summary')); } catch (e) { setError((e as Error).message); }
-  }, [apply]);
+    syncNow().catch(() => undefined);
+  }, [apply, syncNow]);
 
   useEffect(() => {
     if (!profile) { setSummary(null); return; }
@@ -66,7 +84,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const partner = useMemo(() => summary?.members.find((m) => m.id !== summary.me) ?? null, [summary]);
 
   return (
-    <StoreCtx.Provider value={{ summary, error, weather, refresh, apply, planInput, name, color: memberColor, partner }}>
+    <StoreCtx.Provider value={{ summary, error, weather, refresh, apply, planInput, name, color: memberColor, partner, steps, imported, clearImported: () => setImported(0), syncNow }}>
       {children}
     </StoreCtx.Provider>
   );

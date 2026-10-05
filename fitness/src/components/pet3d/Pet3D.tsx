@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, PanResponder, View } from 'react-native';
+import { AppState, PanResponder, Platform, View } from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useFocusEffect } from 'expo-router';
 import * as THREE from 'three';
@@ -22,6 +22,27 @@ type Props = {
   onTap?: () => void;
   interactive?: boolean;
 };
+
+/** Last 3D problem on this phone, shown in Settings so we can see why the flat drawing appeared. */
+export let pet3dStatus: string = 'Not started';
+
+/**
+ * Expo's Android GL context differs from a browser's in a few places that three.js trips over.
+ * These are the same fixes react-three-fiber applies on native: shader logs come back empty
+ * instead of as text, and only one pixelStorei setting is supported.
+ */
+function patchExpoGL(gl: ExpoWebGLRenderingContext) {
+  if (Platform.OS === 'web') return;
+  const g = gl as unknown as Record<string, unknown> & { __patched?: boolean; UNPACK_FLIP_Y_WEBGL: number };
+  if (g.__patched) return;
+  g.__patched = true;
+  const pixelStorei = gl.pixelStorei.bind(gl);
+  g.pixelStorei = (param: number, value: number | boolean) => { if (param === g.UNPACK_FLIP_Y_WEBGL) pixelStorei(param, value as number); };
+  const programLog = gl.getProgramInfoLog.bind(gl);
+  g.getProgramInfoLog = (p: WebGLProgram) => programLog(p) ?? '';
+  const shaderLog = gl.getShaderInfoLog.bind(gl);
+  g.getShaderInfoLog = (s: WebGLShader) => shaderLog(s) ?? '';
+}
 
 const isNight = () => { const h = new Date().getHours(); return h >= 22 || h < 5; };
 
@@ -78,6 +99,8 @@ export function Pet3D({ kind, color, mood, stage, size = 220, celebrate = 0, sle
 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
     try {
+      patchExpoGL(gl);
+      pet3dStatus = 'Starting';
       const w = gl.drawingBufferWidth;
       const h = gl.drawingBufferHeight;
       const canvas = {
@@ -130,8 +153,19 @@ export function Pet3D({ kind, color, mood, stage, size = 220, celebrate = 0, sle
       let tilt = { at: 5, dir: 1 };
       const still = reduceMotion();
 
+      let frames = 0;
       const frame = () => {
         if (!active.current) return;
+        try { draw(); } catch (e) {
+          pet3dStatus = `Stopped: ${(e as Error).message}`;
+          console.warn('3D pet stopped, using the flat drawing', e);
+          setFailed(true);
+          return;
+        }
+        if (++frames === 30) pet3dStatus = 'Running';
+        raf.current = requestAnimationFrame(frame);
+      };
+      const draw = () => {
         const t = clock.getElapsedTime();
         ev.now = t;
         const p = props.current;
@@ -229,11 +263,11 @@ export function Pet3D({ kind, color, mood, stage, size = 220, celebrate = 0, sle
 
         renderer.render(scene, camera);
         gl.endFrameEXP();
-        raf.current = requestAnimationFrame(frame);
       };
       loopRef.current = () => { if (raf.current == null) raf.current = requestAnimationFrame(frame); };
       loopRef.current();
     } catch (e) {
+      pet3dStatus = `Could not start: ${(e as Error).message}`;
       console.warn('3D pet failed, using the flat drawing', e);
       setFailed(true);
     }

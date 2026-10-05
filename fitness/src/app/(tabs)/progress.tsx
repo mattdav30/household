@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Dimensions, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import Svg, { Circle, Polyline } from 'react-native-svg';
 import { useStore } from '../../lib/store';
 import { api, changes, type Measurement } from '../../lib/api';
-import { deletePhoto, listPhotos, POSES, type Photo, type Pose } from '../../lib/photos';
 import { C, S } from '../../lib/theme';
-import { friendly, monthLabel, today } from '../../lib/dates';
+import { friendly, today } from '../../lib/dates';
 import { Appear } from '../../components/Appear';
 import { Legend, WeeksChart } from '../../components/fit';
+import { Photos } from '../../components/Photos';
 import { Button, Card, Chips, DateField, Field, Header, Icon, IconBadge, Segmented, SectionTitle, Sheet, styles as ui, tap } from '../../components/ui';
 
 type Tab = 'overview' | 'photos' | 'tape';
@@ -77,90 +77,6 @@ function Overview() {
           ))}
         </View>
       </Appear>
-    </>
-  );
-}
-
-function Photos() {
-  const router = useRouter();
-  const [pose, setPose] = useState<Pose>('front');
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [view, setView] = useState<Photo | null>(null);
-  const [compare, setCompare] = useState(false);
-  const load = useCallback(() => { try { setPhotos(listPhotos()); } catch { setPhotos([]); } }, []);
-  useFocusEffect(load);
-
-  const forPose = photos.filter((p) => p.pose === pose);
-  const first = forPose[0];
-  const latest = forPose[forPose.length - 1];
-  const w = (Dimensions.get('window').width - S.lg * 2 - S.sm * 2) / 3;
-
-  return (
-    <>
-      <Appear index={0}>
-        <Card style={{ flexDirection: 'row', gap: S.md, alignItems: 'center' }}>
-          <IconBadge name="lock-outline" color={C.green} />
-          <Text style={{ color: C.sub, flex: 1, fontSize: 13, lineHeight: 19 }}>Photos stay on this phone only. They never upload, and nobody else sees them unless you show them.</Text>
-        </Card>
-      </Appear>
-      <Chips value={pose} onChange={setPose} options={POSES} />
-      <Button title={`Take ${pose} photo`} icon="camera-outline" onPress={() => { tap(); router.push({ pathname: '/camera', params: { pose } }); }} />
-
-      {first && latest && first !== latest ? (
-        <>
-          <SectionTitle right={<Pressable onPress={() => setCompare(true)}><Text style={{ color: C.accent, fontWeight: '700' }}>Full screen</Text></Pressable>}>Then and now</SectionTitle>
-          <Pressable onPress={() => setCompare(true)} style={{ flexDirection: 'row', gap: S.sm }}>
-            {[first, latest].map((p) => (
-              <View key={p.name} style={{ flex: 1, gap: 6 }}>
-                <Image source={{ uri: p.uri }} style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 14, backgroundColor: C.raised }} />
-                <Text style={{ color: C.sub, fontSize: 12, textAlign: 'center' }}>{friendly(p.date)}</Text>
-              </View>
-            ))}
-          </Pressable>
-        </>
-      ) : null}
-
-      <SectionTitle>All {pose} photos</SectionTitle>
-      {forPose.length ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
-          {[...forPose].reverse().map((p) => (
-            <Pressable key={p.name} onPress={() => setView(p)} accessibilityLabel={`Photo from ${friendly(p.date)}`}>
-              <Image source={{ uri: p.uri }} style={{ width: w, height: w * 4 / 3, borderRadius: 12, backgroundColor: C.raised }} />
-              <Text style={{ color: C.sub, fontSize: 11, marginTop: 3 }}>{monthLabel(p.date)}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : (
-        <Text style={{ color: C.sub }}>No {pose} photos yet. Take your first today so you have a clear before.</Text>
-      )}
-
-      <Modal visible={!!view} transparent animationType="fade" onRequestClose={() => setView(null)}>
-        <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}>
-          {view ? <Image source={{ uri: view.uri }} style={{ width: '100%', aspectRatio: 3 / 4 }} resizeMode="contain" /> : null}
-          <View style={{ position: 'absolute', bottom: 40, left: S.lg, right: S.lg, flexDirection: 'row', gap: S.md }}>
-            <View style={{ flex: 1 }}><Button title="Close" kind="soft" onPress={() => setView(null)} /></View>
-            <View style={{ flex: 1 }}>
-              <Button title="Delete" kind="danger" onPress={() => Alert.alert('Delete this photo?', 'It is only stored on this phone, so this cannot be undone.', [
-                { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { deletePhoto(view!); setView(null); load(); } },
-              ])} />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={compare} transparent animationType="fade" onRequestClose={() => setCompare(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', padding: S.sm }} onPress={() => setCompare(false)}>
-          <View style={{ flexDirection: 'row', gap: S.sm }}>
-            {first && latest ? [first, latest].map((p) => (
-              <View key={p.name} style={{ flex: 1 }}>
-                <Image source={{ uri: p.uri }} style={{ width: '100%', aspectRatio: 3 / 4, borderRadius: 8 }} />
-                <Text style={{ color: '#fff', textAlign: 'center', marginTop: 8, fontWeight: '700' }}>{friendly(p.date)}</Text>
-              </View>
-            )) : null}
-          </View>
-          <Text style={{ color: '#aaa', textAlign: 'center', marginTop: S.xl }}>Tap to close</Text>
-        </Pressable>
-      </Modal>
     </>
   );
 }
