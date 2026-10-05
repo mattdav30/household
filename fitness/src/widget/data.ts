@@ -15,10 +15,12 @@ export async function loadWidgetData(): Promise<{ data: WidgetData | null; messa
     const s = await api<Summary>('/api/fit/summary');
     const me = s.members.find((m) => m.id === s.me);
     const { session } = todaysSession({ date: s.today, week: s.week_index, level: me?.level ?? 1, equipment: s.settings.equipment as Equip[], quiet: local.quiet() });
-    const next = s.journey.next != null ? s.journey.stops[s.journey.next] : null;
+    const j = s.journey;
+    const next = j && !j.complete && j.next != null ? j.stops[j.next] : null;
     const data: WidgetData = {
       session: session.title, minutes: session.minutes, done: !!s.streaks[s.me]?.done_today, streak: s.streaks[s.me]?.days ?? 0,
-      week: s.week.total, goal: s.week.goal, next: next?.name ?? null, kmLeft: next ? next.km - s.journey.km : 0, days: s.days_to_wedding,
+      week: s.week.total, goal: s.week.goal, next: next?.name ?? null, kmLeft: next && j ? next.km - j.km : 0,
+      label: s.countdown.days > 0 ? `${s.countdown.days} DAYS TO ${s.countdown.label.toUpperCase()}` : j ? `WEEK ${j.week} OF ${j.title.toUpperCase()}` : 'KEEP MOVING',
     };
     if (Platform.OS === 'android') await SecureStore.setItemAsync(CACHE, JSON.stringify(data)).catch(() => undefined);
     return { data };

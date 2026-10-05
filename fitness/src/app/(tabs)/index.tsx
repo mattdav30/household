@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useStore } from '../../lib/store';
 import { todaysSession, TYPE_INFO } from '../../lib/plan';
 import { local } from '../../lib/local';
+import { api, type Summary } from '../../lib/api';
 import { weatherIcon } from '../../lib/weather';
 import { C, S, tint } from '../../lib/theme';
 import { friendly } from '../../lib/dates';
@@ -18,7 +19,7 @@ const greeting = () => {
 
 export default function Today() {
   const router = useRouter();
-  const { summary, error, weather, refresh, planInput, name, color } = useStore();
+  const { summary, error, weather, refresh, apply, planInput, name, color } = useStore();
   const [refreshing, setRefreshing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [shuffle, setShuffle] = useState(() => (summary ? local.shuffle(summary.today) : 0));
@@ -46,13 +47,26 @@ export default function Today() {
   const col = accentOf(info.color);
   const myStreak = summary.streaks[summary.me];
   const minutesToday = summary.week.days.find((d) => d.date === summary.today)?.by_user ?? {};
-  const next = summary.journey.next != null ? summary.journey.stops[summary.journey.next] : null;
-  const kmLeft = next ? next.km - summary.journey.km : 0;
-  const minLeft = Math.ceil(kmLeft / summary.journey.km_per_minute);
-  const pace = summary.journey.fraction - summary.journey.expected_fraction;
-  const paceText = pace >= 0
-    ? `On pace, ${Math.round(pace * summary.journey.total_km)} km ahead`
-    : `${Math.ceil((-pace * summary.journey.goal_minutes))} minutes to catch the schedule`;
+  const j = summary.journey;
+  const next = j && !j.complete && j.next != null ? j.stops[j.next] : null;
+  const kmLeft = next && j ? next.km - j.km : 0;
+  const minLeft = j ? Math.ceil(kmLeft / j.km_per_minute) : 0;
+  const pace = j ? j.fraction - j.expected_fraction : 0;
+  const paceText = !j ? '' : pace >= 0
+    ? `On pace, ${Math.round(pace * j.total_km)} km ahead`
+    : `${Math.ceil(-pace * j.goal_minutes)} minutes to catch the schedule`;
+  const eyebrow = summary.countdown.days > 0
+    ? `${summary.countdown.days} ${summary.countdown.days === 1 ? 'day' : 'days'} to ${summary.countdown.label}`
+    : j ? j.title : 'Keep moving';
+  const subtitle = j && !j.complete ? `Week ${j.week} of ${j.total_weeks} on ${j.title}` : `Week ${summary.week_index + 1} of training`;
+
+  // Suggest a step up when someone has been consistent for a month.
+  const levelNames = ['', 'Easy start', 'Steady', 'Strong'];
+  const showLevelUp = me.level < 3 && me.active_days_28 >= 16 && !local.levelUpSnoozed(summary.today);
+  const levelUp = async () => {
+    tap();
+    try { apply(await api<Summary>('/api/fit/profile', { method: 'PATCH', body: { level: me.level + 1 } })); } catch { /* shows on next refresh */ }
+  };
 
   const start = (type = session.type, s = shuffle) => { tap(); router.push({ pathname: '/session', params: { type, shuffle: String(s) } }); };
   const reshuffle = () => { const n = shuffle + 1; setShuffle(n); local.setShuffle(summary.today, n); };
@@ -60,8 +74,7 @@ export default function Today() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 140 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} colors={[C.accent]} progressBackgroundColor={C.card} />}>
-        <Header eyebrow={`${summary.days_to_wedding} days to the wedding`} title={`${greeting()}, ${me.name}`}
-          subtitle={`Week ${summary.week_index + 1} of ${summary.total_weeks}`}
+        <Header eyebrow={eyebrow} title={`${greeting()}, ${me.name}`} subtitle={subtitle}
           right={<HeaderButton icon="cog-outline" a11y="Settings" onPress={() => router.push('/settings')} />} />
         <ErrorBar error={error} />
         <View style={{ paddingHorizontal: S.lg, gap: S.md }}>
@@ -115,6 +128,24 @@ export default function Today() {
             </View>
           </Appear>
 
+          {showLevelUp ? (
+            <Appear index={2}>
+              <View style={[ui.card, { gap: S.md, borderColor: C.green }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
+                  <IconBadge name="trending-up" color={C.green} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.rowTitle}>Ready to step up?</Text>
+                    <Text style={ui.rowSub}>You moved on {me.active_days_28} of the last 28 days. Switch from {levelNames[me.level]} to {levelNames[me.level + 1]} for longer, harder sessions.</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: S.sm }}>
+                  <View style={{ flex: 1 }}><Button title={`Go ${levelNames[me.level + 1]}`} onPress={levelUp} /></View>
+                  <View style={{ flex: 1 }}><Button title="Later" kind="ghost" onPress={() => { local.snoozeLevelUp(summary.today); refresh(); }} /></View>
+                </View>
+              </View>
+            </Appear>
+          ) : null}
+
           <Appear index={2}>
             <SectionTitle right={<Text style={[{ color: C.sub, fontWeight: '700' }, ui.num]}>{summary.week.total} / {summary.week.goal} min</Text>}>This week together</SectionTitle>
             <Card style={{ gap: S.md }}>
@@ -145,21 +176,34 @@ export default function Today() {
           </Appear>
 
           <Appear index={4}>
-            <SectionTitle>The road</SectionTitle>
-            <Pressable onPress={() => router.push('/journey')} accessibilityRole="button" style={({ pressed }) => [ui.card, { gap: S.sm, opacity: pressed ? 0.85 : 1 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
-                <IconBadge name="airplane" color={C.warm} />
-                <View style={{ flex: 1 }}>
-                  <Text style={ui.rowTitle}>{next ? `${kmLeft.toLocaleString()} km to ${next.name}` : 'You made it to the onsen'}</Text>
-                  <Text style={ui.rowSub}>{next ? `About ${minLeft} more minutes between you${next.reward ? `. Reward: ${next.reward}` : ''}` : 'Every reward unlocked.'}</Text>
+            <SectionTitle>{j ? j.title : 'Your journey'}</SectionTitle>
+            {!j || j.complete ? (
+              <Pressable onPress={() => router.push('/journey')} accessibilityRole="button" style={({ pressed }) => [ui.card, { gap: S.sm, borderColor: C.gold, backgroundColor: C.goldSoft, opacity: pressed ? 0.85 : 1 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
+                  <IconBadge name="flag-checkered" color={C.gold} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.rowTitle}>{j ? (j.arrived ? `You made it to ${j.stops[j.stops.length - 1].name}` : `${j.title} has ended`) : 'Pick your first journey'}</Text>
+                    <Text style={ui.rowSub}>Pick the next route and keep the momentum going.</Text>
+                  </View>
+                  <Icon name="chevron-right" color={C.faint} />
                 </View>
-                <Icon name="chevron-right" color={C.faint} />
-              </View>
-              <View style={{ height: 6, borderRadius: 3, backgroundColor: C.raised, overflow: 'hidden' }}>
-                <View style={{ height: 6, width: `${summary.journey.fraction * 100}%`, backgroundColor: C.accent }} />
-              </View>
-              <Text style={{ color: pace >= 0 ? C.green : C.sub, fontSize: 13 }}>{paceText}</Text>
-            </Pressable>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => router.push('/journey')} accessibilityRole="button" style={({ pressed }) => [ui.card, { gap: S.sm, opacity: pressed ? 0.85 : 1 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
+                  <IconBadge name="airplane" color={C.warm} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.rowTitle}>{next ? `${kmLeft.toLocaleString()} km to ${next.name}` : 'Final stop reached'}</Text>
+                    <Text style={ui.rowSub}>{next ? `About ${minLeft} more minutes between you${next.reward ? `. Reward: ${next.reward}` : ''}` : 'Every reward unlocked.'}</Text>
+                  </View>
+                  <Icon name="chevron-right" color={C.faint} />
+                </View>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: C.raised, overflow: 'hidden' }}>
+                  <View style={{ height: 6, width: `${j.fraction * 100}%`, backgroundColor: C.accent }} />
+                </View>
+                <Text style={{ color: pace >= 0 ? C.green : C.sub, fontSize: 13 }}>{paceText}</Text>
+              </Pressable>
+            )}
           </Appear>
 
           <Appear index={5}>

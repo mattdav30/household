@@ -16,6 +16,7 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 
 A second Android app in `fitness/` for working out together before the wedding. It signs in with the same Household accounts and talks to the same API, under `/api/fit`.
 
+* Journeys repeat. Road to Tokyo is the first; when one ends, you pick the next route (Tokyo to Seoul, Lap of Australia, The Camino) and a length. Finished journeys stay on a shelf, and workouts keep getting harder past the first 30 weeks.
 * Workouts are built on the phone from `fitness/src/lib/exercises.ts` and `fitness/src/lib/plan.ts`. No gym or pool needed.
 * The API lives in `worker/src/fitness.ts`, with tables from `worker/migrations/0004_fitness.sql`.
 * Progress photos stay on each phone in the app's private folder. They never reach the server.

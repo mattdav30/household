@@ -26,7 +26,7 @@ export type Session = {
 
 export type PlanInput = {
   date: string; // YYYY-MM-DD
-  week: number; // weeks since the journey started
+  week: number; // weeks of training since the very first day
   level: number; // 1 easy start, 2 steady, 3 strong
   equipment: Equip[];
   quiet: boolean; // no jumping
@@ -35,14 +35,14 @@ export type PlanInput = {
 };
 
 export const TYPE_INFO: Record<SessionType, { label: string; short: string; icon: string; color: 'accent' | 'warm' | 'gold' | 'green'; blurb: string }> = {
-  strength: { short: 'Strength', label: 'Strength circuit', icon: 'arm-flex', color: 'accent', blurb: 'Full body circuit. Builds the muscle that shapes the suit and the dress.' },
+  strength: { short: 'Strength', label: 'Strength circuit', icon: 'arm-flex', color: 'accent', blurb: 'Full body circuit to build strength and shape.' },
   hiit: { short: 'Cardio', label: 'Cardio and core', icon: 'heart-pulse', color: 'warm', blurb: 'Intervals that raise your heart rate, finished with core.' },
   tabata: { short: 'Tabata', label: 'Tabata blast', icon: 'lightning-bolt', color: 'gold', blurb: '20 seconds hard, 10 seconds rest. Short and sharp.' },
   stretch: { short: 'Stretch', label: 'Stretch and recover', icon: 'yoga', color: 'green', blurb: 'Easy mobility for rest days. Counts towards your streak.' },
   partner: { short: 'Partner', label: 'Partner workout', icon: 'account-heart', color: 'warm', blurb: 'Built for two. High fives included.' },
   walk: { short: 'Walk', label: 'Interval walk', icon: 'walk', color: 'green', blurb: 'Brisk walking with faster bursts. Outdoors, no gear.' },
   stairs: { short: 'Stairs', label: 'Stair session', icon: 'stairs', color: 'gold', blurb: 'Climb, recover, repeat. Brisbane has great stairs.' },
-  dance: { short: 'Dance', label: 'First dance practice', icon: 'music-note', color: 'accent', blurb: 'Rehearse your wedding dance. Every minute counts.' },
+  dance: { short: 'Dance', label: 'Dance session', icon: 'music-note', color: 'accent', blurb: 'Practise your first dance, or put on a playlist and move. Every minute counts.' },
   quick: { short: 'Ten min', label: 'Ten minute floor', icon: 'timer-sand', color: 'accent', blurb: 'Low on drive? Ten minutes keeps the streak alive.' },
 };
 
@@ -75,9 +75,12 @@ const pickN = <T,>(arr: T[], n: number, r: () => number) => {
 };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** 0 at the very start for an easy starter, up to about 1.7 for a strong person late in the plan. */
+/**
+ * 0 on day one for an easy starter. Climbs steadily over the first 30 weeks, then keeps creeping up
+ * for another year, so the workouts keep pace with you long after the wedding.
+ */
 export function difficulty(week: number, level: number) {
-  return clamp(week / 30, 0, 1) + (clamp(level, 1, 3) - 1) * 0.35;
+  return clamp(week / 30, 0, 1) + clamp((week - 30) / 52, 0, 0.5) + (clamp(level, 1, 3) - 1) * 0.35;
 }
 
 function pool(p: PlanInput, area: Area | Area[], opts: { partner?: boolean } = {}) {
@@ -214,7 +217,7 @@ export function buildSession(type: SessionType, p: PlanInput): Session {
     const songs = 4 + Math.round(d * 2);
     const steps: Step[] = [...warmUp().slice(0, 4)];
     for (let i = 0; i < songs; i++) {
-      steps.push({ name: i % 2 ? 'Full run through' : 'Practise the tricky part', seconds: 240, kind: 'work', cue: `Song ${i + 1} of ${songs}. Play your first dance song.` });
+      steps.push({ name: i % 2 ? 'Full run through' : 'Work on the tricky part', seconds: 240, kind: 'work', cue: `Song ${i + 1} of ${songs}. Your first dance song, or anything you love.` });
       if (i < songs - 1) steps.push({ name: 'Breather', seconds: 60, kind: 'rest', cue: 'Talk through what to change.' });
     }
     steps.push(...coolDown(r, 2));

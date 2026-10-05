@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, Switch, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Polyline, Text as SvgText } from 'react-native-svg';
 import { C, S, tint } from '../lib/theme';
 import { reduceMotion } from '../lib/motion';
-import { api, changes, type Summary } from '../lib/api';
+import { api, changes, type JourneyState, type Summary } from '../lib/api';
 import { today as todayIso, friendly } from '../lib/dates';
 import { useStore } from '../lib/store';
 import { Chips, Field, Icon, Sheet, styles as ui, tap, DateField, type IconName } from './ui';
@@ -64,9 +64,9 @@ export function Legend({ summary, values, unit = 'min' }: { summary: Summary; va
 }
 
 /** Route from Brisbane to the onsen, drawn from the stop coordinates. The travelled part glows. */
-export function RouteMap({ summary, height = 300, onStop }: { summary: Summary; height?: number; onStop?: (i: number) => void }) {
+export function RouteMap({ journey, height = 300, onStop }: { journey: JourneyState; height?: number; onStop?: (i: number) => void }) {
   const [w, setW] = useState(0);
-  const { stops, km } = summary.journey;
+  const { stops, km } = journey;
   const pts = useMemo(() => {
     if (!w) return [];
     const lats = stops.map((s) => s.lat);
@@ -99,7 +99,7 @@ export function RouteMap({ summary, height = 300, onStop }: { summary: Summary; 
 
   return (
     <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ height, borderRadius: 16, backgroundColor: C.raised, overflow: 'hidden' }}
-      accessibilityLabel={`Map. ${km} of ${summary.journey.total_km} kilometres travelled.`}>
+      accessibilityLabel={`Map. ${km} of ${journey.total_km} kilometres travelled.`}>
       {w ? (
         <Svg width={w} height={height}>
           {Array.from({ length: 6 }, (_, i) => (
@@ -112,9 +112,9 @@ export function RouteMap({ summary, height = 300, onStop }: { summary: Summary; 
             const last = i === pts.length - 1;
             const labelLeft = p.x > w * 0.62;
             return (
-              <G key={st.name} onPress={onStop ? () => onStop(i) : undefined}>
+              <G key={`${st.name}${i}`} onPress={onStop ? () => onStop(i) : undefined}>
                 <Circle cx={p.x} cy={p.y} r={last ? 8 : 5} fill={st.reached ? (last ? C.gold : C.accent) : C.card} stroke={last ? C.gold : st.reward ? C.warm : C.faint} strokeWidth={2} />
-                {(i % 2 === 0 || last || i === summary.journey.next) ? (
+                {(i % 2 === 0 || last || i === journey.next) ? (
                   <SvgText x={labelLeft ? p.x - 10 : p.x + 10} y={p.y + 4} fontSize={10} fontWeight="700" fill={st.reached ? C.ink : C.sub} textAnchor={labelLeft ? 'end' : 'start'}>{st.name}</SvgText>
                 ) : null}
               </G>

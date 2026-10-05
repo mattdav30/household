@@ -291,7 +291,7 @@ function RoundButton({ icon, label, onPress, big }: { icon: 'play' | 'pause' | '
   );
 }
 
-/** Save the session, then show what it earned: distance, the gym fund and the streak. */
+/** Save the session, then show what it earned: distance, the fund and the streak. */
 function Finish({ session, seconds, together, onDone }: { session: Session; seconds: number; together: boolean; onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const { summary, apply } = useStore();
@@ -317,9 +317,10 @@ function Finish({ session, seconds, together, onDone }: { session: Session; seco
   };
 
   if (saved && summary) {
-    const kmGained = Math.round(minutes * (together ? summary.members.length : 1) * saved.journey.km_per_minute);
-    const newlyReached = saved.journey.stops.filter((s) => s.reached && !summary.journey.stops[s.index]?.reached);
-    const next = saved.journey.next != null ? saved.journey.stops[saved.journey.next] : null;
+    const sj = saved.journey;
+    const kmGained = sj ? Math.round(minutes * (together ? summary.members.length : 1) * sj.km_per_minute) : 0;
+    const newlyReached = sj && summary.journey?.id === sj.id ? sj.stops.filter((s) => s.reached && !summary.journey!.stops[s.index]?.reached) : [];
+    const next = sj && sj.next != null ? sj.stops[sj.next] : null;
     const streak = saved.streaks[saved.me];
     const coin = !summary.streaks[summary.me]?.done_today && minutes >= 10;
     return (
@@ -330,12 +331,15 @@ function Finish({ session, seconds, together, onDone }: { session: Session; seco
           <Text style={[ui.headerSub, { textAlign: 'center' }]}>{together ? 'Logged for both of you.' : 'Every minute moves you both along.'}</Text>
         </Animated.View>
         <View style={{ gap: S.md, marginTop: S.xl }}>
-          <Earned icon="airplane" color={C.accent} title={`+${kmGained} km towards Tokyo`} sub={next ? `${(next.km - saved.journey.km).toLocaleString()} km to ${next.name}` : 'You reached the onsen'} />
+          {sj && !(summary.journey?.complete) ? (
+            <Earned icon="airplane" color={C.accent} title={`+${kmGained} km on ${sj.title}`}
+              sub={next ? `${(next.km - sj.km).toLocaleString()} km to ${next.name}` : `You reached ${sj.stops[sj.stops.length - 1].name}`} />
+          ) : null}
           {newlyReached.map((s) => (
             <Earned key={s.name} icon="map-marker-check" color={C.warm} title={`You reached ${s.name}`} sub={s.reward ? `Reward unlocked: ${s.reward}` : s.note} />
           ))}
           <Earned icon="fire" color={C.gold} title={`${streak?.days ?? 0} day streak`} sub={streak?.days && streak.days > 1 ? 'Keep the chain going tomorrow.' : 'Day one of the chain.'} />
-          {coin ? <Earned icon="piggy-bank" color={C.green} title={`+${money(saved.jar.rate_cents)} in the gym fund`} sub={`${money(saved.jar.earned_cents - saved.jar.banked_cents)} ready to move to savings`} /> : null}
+          {coin ? <Earned icon="piggy-bank" color={C.green} title={`+${money(saved.jar.rate_cents)} in the fund`} sub={`${money(saved.jar.earned_cents - saved.jar.banked_cents)} ready to move to savings`} /> : null}
         </View>
         <View style={{ flex: 1 }} />
         <Button title="Done" onPress={onDone} />

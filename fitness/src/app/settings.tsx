@@ -22,6 +22,9 @@ export default function Settings() {
   const [goal, setGoal] = useState('');
   const [rate, setRate] = useState('');
   const [jarGoal, setJarGoal] = useState('');
+  const [jarLabel, setJarLabel] = useState(summary?.settings.jar_label ?? '');
+  const [countdown, setCountdown] = useState(summary?.settings.countdown_label ?? '');
+  const [journeyName, setJourneyName] = useState(summary?.journey?.title ?? '');
 
   useEffect(() => {
     if (!summary) return;
@@ -70,7 +73,7 @@ export default function Settings() {
         <View style={{ gap: S.sm }}>
           <Field label="Weekly goal, minutes combined" value={goal} onChangeText={(t) => setGoal(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad"
             onEndEditing={() => Number(goal) >= 30 && save('/api/fit/settings', { weekly_goal_min: Number(goal) })} />
-          <Text style={{ color: C.sub, fontSize: 13 }}>300 minutes is 150 each, the weekly amount health guidelines suggest for adults. This also sets the pace of the map.</Text>
+          <Text style={{ color: C.sub, fontSize: 13 }}>300 minutes is 150 each, the weekly amount health guidelines suggest for adults. This also sets the pace of each journey.</Text>
         </View>
         <View style={{ gap: S.sm }}>
           <Text style={ui.label}>Equipment at home</Text>
@@ -80,19 +83,30 @@ export default function Settings() {
         </View>
         <View style={{ flexDirection: 'row', gap: S.md }}>
           <View style={{ flex: 1 }}>
-            <Field label="Gym fund per day moved" value={rate} onChangeText={setRate} keyboardType="decimal-pad"
+            <Field label="Fund per day moved" value={rate} onChangeText={setRate} keyboardType="decimal-pad"
               onEndEditing={() => { const c = toCents(rate); if (c != null) save('/api/fit/settings', { jar_cents: c }); }} />
           </View>
           <View style={{ flex: 1 }}>
-            <Field label="Gym fund goal, $" value={jarGoal} onChangeText={(t) => setJarGoal(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad"
+            <Field label="Fund goal, $" value={jarGoal} onChangeText={(t) => setJarGoal(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad"
               onEndEditing={() => Number(jarGoal) > 0 && save('/api/fit/settings', { jar_goal_cents: Number(jarGoal) * 100 })} />
           </View>
         </View>
-        <Text style={{ color: C.sub, fontSize: 13, marginTop: -S.sm }}>Currently {money(summary.settings.jar_cents)} a day each, towards {money(summary.settings.jar_goal_cents)}.</Text>
-        <View style={{ flexDirection: 'row', gap: S.md }}>
-          <DateField label="Journey started" value={summary.settings.start_date} onChange={(d) => d && save('/api/fit/settings', { start_date: d })} />
-          <DateField label="Wedding day" value={summary.settings.wedding_date} onChange={(d) => d && save('/api/fit/settings', { wedding_date: d })} />
+        <Text style={{ color: C.sub, fontSize: 13, marginTop: -S.sm }}>Currently {money(summary.settings.jar_cents)} a day each, towards {money(summary.settings.jar_goal_cents)} for {summary.jar.label}.</Text>
+        <Field label="What the fund is for" value={jarLabel} onChangeText={setJarLabel}
+          onEndEditing={() => jarLabel.trim() && save('/api/fit/settings', { jar_label: jarLabel.trim() })} />
+        <View style={{ gap: S.sm }}>
+          <Field label="Counting down to" value={countdown} onChangeText={setCountdown} placeholder="the wedding"
+            onEndEditing={() => countdown.trim() && save('/api/fit/settings', { countdown_label: countdown.trim() })} />
+          <DateField label="Countdown date" value={summary.settings.wedding_date} onChange={(d) => d && save('/api/fit/settings', { wedding_date: d })} />
+          <Text style={{ color: C.sub, fontSize: 13 }}>Shows on Today until the day arrives. Point it at the next big thing after the wedding, like the honeymoon or a fun run.</Text>
         </View>
+        {summary.journey ? (
+          <View style={{ gap: S.sm }}>
+            <Field label="Current journey name" value={journeyName} onChangeText={setJourneyName}
+              onEndEditing={() => journeyName.trim() && save('/api/fit/journey', { title: journeyName.trim() })} />
+            <DateField label="Current journey ends" value={summary.journey.end_date} onChange={(d) => d && save('/api/fit/journey', { end_date: d })} />
+          </View>
+        ) : null}
       </Card>
 
       <Button title="Sign out" kind="danger" onPress={() => Alert.alert('Sign out?', 'Your progress photos stay on this phone.', [

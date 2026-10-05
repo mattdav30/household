@@ -39,14 +39,14 @@ export async function scheduleReminders(s: Summary) {
   if (Platform.OS === 'web') return;
   const me = s.members.find((m) => m.id === s.me);
   const hour = me?.reminder_hour;
-  const key = JSON.stringify([s.today, hour, s.streaks[s.me]?.done_today, s.week.total, s.journey.next]);
+  const key = JSON.stringify([s.today, hour, s.streaks[s.me]?.done_today, s.week.total, s.journey?.next, s.journey?.complete]);
   if (key === lastKey) return;
   lastKey = key;
   if (!(await ensurePermission())) return;
   await Notifications.cancelAllScheduledNotificationsAsync();
   const now = Date.now();
   const streak = s.streaks[s.me];
-  const next = s.journey.next != null ? s.journey.stops[s.journey.next] : null;
+  const next = s.journey && s.journey.next != null ? s.journey.stops[s.journey.next] : null;
 
   for (let i = 0; i < 21; i++) {
     const date = addDays(s.today, i);

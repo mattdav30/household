@@ -87,7 +87,7 @@ function Photos() {
           ))}
         </View>
       ) : (
-        <Text style={{ color: C.sub }}>No {pose} photos yet. Take your first today so you have a clear before for the wedding.</Text>
+        <Text style={{ color: C.sub }}>No {pose} photos yet. Take your first today so you have a clear before.</Text>
       )}
 
       <Modal visible={!!view} transparent animationType="fade" onRequestClose={() => setView(null)}>

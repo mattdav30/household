@@ -28,6 +28,13 @@ export const local = {
     return d === date ? Number(n) || 0 : 0;
   },
   setShuffle: (date: string, n: number) => write('rtt_shuffle', `${date}:${n}`),
+  /** Hides the step up suggestion for four weeks after Later. */
+  levelUpSnoozed: (today: string) => { const v = read('rtt_levelup'); return !!v && v > today; },
+  snoozeLevelUp: (today: string) => {
+    const [y, m, d] = today.split('-').map(Number);
+    const t = new Date(y, m - 1, d + 28);
+    write('rtt_levelup', `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`);
+  },
   summaryCache: () => read('rtt_summary'),
   setSummaryCache: (json: string) => { if (json.length < 1900) write('rtt_summary', json); },
 };

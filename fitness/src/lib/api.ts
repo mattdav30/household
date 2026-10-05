@@ -72,29 +72,38 @@ export type Stop = {
   reward: string | null; claimed_at: number | null;
 };
 export type Streak = { days: number; done_today: boolean; shields_left: number; last_shield: string | null };
-export type FitMember = { id: string; name: string; color: string; level: number; reminder_hour: number | null };
+export type FitMember = { id: string; name: string; color: string; level: number; reminder_hour: number | null; active_days_28: number };
+export type JourneyState = {
+  id: string; route: string; title: string; start_date: string; end_date: string; finished_at: number | null;
+  stops: Stop[]; total_km: number; km: number; fraction: number; minutes: number; goal_minutes: number;
+  expected_fraction: number; next: number | null; km_per_minute: number;
+  week: number; total_weeks: number; days_left: number; complete: boolean; arrived: boolean; stops_reached: number;
+};
+export type Route = { id: string; title: string; blurb: string; total_km: number; stops: number; from: string; to: string };
+export type PastJourney = {
+  id: string; title: string; route: string; start_date: string; end_date: string; finished_at: number;
+  minutes: number; km: number; total_km: number; fraction: number; arrived: boolean; stops_reached: number; stops: number; furthest: string;
+};
 export type Summary = {
   today: string;
   me: string;
   settings: {
     start_date: string; wedding_date: string; weekly_goal_min: number; jar_cents: number; jar_goal_cents: number;
-    equipment: string[]; default_stake: string;
+    equipment: string[]; default_stake: string; countdown_label: string; jar_label: string;
   };
   members: FitMember[];
-  days_to_wedding: number;
+  countdown: { label: string; date: string; days: number };
   week_index: number;
-  total_weeks: number;
   week: { start: string; goal: number; by_user: Record<string, number>; total: number; days: { date: string; by_user: Record<string, number> }[] };
   streaks: Record<string, Streak>;
-  journey: {
-    stops: Stop[]; total_km: number; km: number; fraction: number; minutes: number; goal_minutes: number;
-    expected_fraction: number; next: number | null; km_per_minute: number;
-  };
+  journey: JourneyState | null;
+  journeys_finished: number;
+  routes: Route[];
   challenge: {
     week_start: string; stake: string; by_user: Record<string, number>;
     last: null | { week_start: string; stake: string; by_user: Record<string, number>; meal_id: string | null; winner: string | null; loser: string | null };
   };
-  jar: { sessions: number; rate_cents: number; earned_cents: number; banked_cents: number; goal_cents: number };
+  jar: { sessions: number; rate_cents: number; earned_cents: number; banked_cents: number; goal_cents: number; label: string };
   recent: Workout[];
 };
 export type Measurement = {

@@ -46,7 +46,7 @@ export default function Login() {
         </View>
         <View>
           <Text style={ui.h1}>Road to Tokyo</Text>
-          <Text style={[ui.headerSub, { fontSize: 16 }]}>Moving together for the wedding. Use the same email and password as Household.</Text>
+          <Text style={[ui.headerSub, { fontSize: 16 }]}>Moving together, one journey at a time. Use the same email and password as Household.</Text>
         </View>
 
         <Chips<Mode> value={mode} onChange={(m) => { setMode(m); setError(null); }} options={[

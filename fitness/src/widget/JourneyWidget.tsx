@@ -9,7 +9,7 @@ export type WidgetData = {
   goal: number;
   next: string | null;
   kmLeft: number;
-  days: number;
+  label: string;
 };
 
 type Hex = `#${string}`;
@@ -26,7 +26,7 @@ export function JourneyWidget({ data, mode, message }: { data: WidgetData | null
     <FlexWidget clickAction="OPEN_APP" accessibilityLabel="Road to Tokyo"
       style={{ height: 'match_parent', width: 'match_parent', backgroundColor: c.bg, borderRadius: 22, padding: 14, flexDirection: 'column', flexGap: 8 }}>
       <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', alignItems: 'center' }}>
-        <TextWidget text={data ? `${data.days} DAYS TO GO` : 'ROAD TO TOKYO'} style={{ fontSize: 11, color: c.accent, fontWeight: '700', letterSpacing: 0.08 }} />
+        <TextWidget text={data ? data.label : 'ROAD TO TOKYO'} style={{ fontSize: 11, color: c.accent, fontWeight: '700', letterSpacing: 0.08 }} />
         <FlexWidget style={{ flex: 1 }} />
         {data ? <TextWidget text={`${data.streak} day streak`} style={{ fontSize: 12, color: c.gold, fontWeight: '700' }} /> : null}
       </FlexWidget>
