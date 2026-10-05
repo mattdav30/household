@@ -10,7 +10,8 @@ import { EQUIPMENT, type Equip } from '../lib/exercises';
 import { C, MODE, S, setMode } from '../lib/theme';
 import { ensurePermission } from '../lib/notify';
 import { Card, Chips, DateField, Field, Icon, SectionTitle, Swatches, Button, styles as ui, tap } from '../components/ui';
-import { PetArt, PET_COLORS, PET_KINDS } from '../components/Pet';
+import { PET_COLORS, PET_KINDS } from '../components/Pet';
+import { Pet3D } from '../components/pet3d/Pet3D';
 
 export default function Settings() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function Settings() {
       <SectionTitle>Your pet</SectionTitle>
       <Card style={{ gap: S.lg }}>
         <View style={{ alignItems: 'center' }}>
-          <PetArt kind={summary.settings.pet_kind} color={summary.settings.pet_color} mood="happy" stage={summary.pet.stage} size={140} />
+          <Pet3D kind={summary.settings.pet_kind} color={summary.settings.pet_color} mood="happy" stage={summary.pet.stage} size={170} sleepy={false} />
         </View>
         <Field label="Name" value={petName} onChangeText={setPetName} maxLength={24}
           onEndEditing={() => petName.trim() && save('/api/fit/settings', { pet_name: petName.trim() })} />

@@ -11,7 +11,8 @@ import { friendly } from '../../lib/dates';
 import { Appear } from '../../components/Appear';
 import { Button, Card, Chips, ErrorBar, Field, Header, HeaderButton, Icon, IconBadge, Loading, SectionTitle, Swatches, styles as ui, tap } from '../../components/ui';
 import { Legend, LogSheet, WeekBars, kindIcon } from '../../components/fit';
-import { Pet, PetArt, PET_COLORS, PET_KINDS, petLine } from '../../components/Pet';
+import { PET_COLORS, PET_KINDS, petLine } from '../../components/Pet';
+import { Pet3D } from '../../components/pet3d/Pet3D';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -25,6 +26,7 @@ export default function Home() {
   const [logging, setLogging] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  const [party, setParty] = useState(0);
 
   const plan = useMemo(() => {
     const p = planInput();
@@ -69,12 +71,13 @@ export default function Home() {
       apply(r.summary);
       changes.emit('workouts');
       const meAfter = r.summary.members.find((m) => m.id === r.summary.me)!;
+      setParty((n) => n + 1);
       setSaid(meAfter.today_minutes >= meAfter.target ? `Yum! That's your step done for today, ${me.name}.` : `Thanks! ${meAfter.target - meAfter.today_minutes} more minutes for your step.`);
     } catch (e) { setSaid((e as Error).message); } finally { setBusy(null); }
   };
   const stepUp = async () => {
     tap();
-    try { apply(await api<Summary>('/api/fit/profile', { method: 'PATCH', body: { step: me.step + 1 } })); setSaid(`Step ${me.step + 1}! I'm so proud of you.`); } catch { /* next refresh */ }
+    try { apply(await api<Summary>('/api/fit/profile', { method: 'PATCH', body: { step: me.step + 1 } })); setParty((n) => n + 1); setSaid(`Step ${me.step + 1}! I'm so proud of you.`); } catch { /* next refresh */ }
   };
   const start = (type = session.type) => { tap(); router.push({ pathname: '/session', params: { type } }); };
 
@@ -87,11 +90,11 @@ export default function Home() {
         <ErrorBar error={error} />
         <View style={{ paddingHorizontal: S.lg, gap: S.md }}>
           <Appear index={0}>
-            <View style={[ui.card, { alignItems: 'center', gap: S.sm, paddingTop: S.xl }]}>
+            <View style={[ui.card, { alignItems: 'center', gap: S.sm, paddingTop: S.lg }]}>
               <View style={{ backgroundColor: C.raised, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 9, maxWidth: '90%' }}>
                 <Text style={{ color: C.ink, fontSize: 15, fontWeight: '600', textAlign: 'center' }} accessibilityLiveRegion="polite">{line}</Text>
               </View>
-              <Pet kind={pet.kind} color={pet.color} mood={pet.mood} stage={pet.stage} size={190}
+              <Pet3D kind={pet.kind} color={pet.color} mood={pet.mood} stage={pet.stage} size={230} celebrate={party}
                 onTap={() => setSaid(pet.mood === 'sad' ? 'A walk would cheer me up.' : ['Hehe!', 'Again!', `I love you, ${me.name}.`, 'Walkies?'][Math.floor(Math.random() * 4)])} />
               <Text style={ui.h2}>{pet.name}</Text>
               <Text style={{ color: C.sub, fontSize: 13 }}>
@@ -236,7 +239,7 @@ function Welcome() {
       <Header eyebrow="Welcome" title="Meet your pet" subtitle="You share one pet. Every day either of you moves for ten minutes, it gets fed and grows." />
       <View style={{ paddingHorizontal: S.lg, gap: S.lg }}>
         <View style={[ui.card, { alignItems: 'center' }]}>
-          <PetArt kind={kind} color={color} mood="happy" stage={0} size={180} />
+          <Pet3D kind={kind} color={color} mood="happy" stage={0} size={210} sleepy={false} />
         </View>
         <Chips label="Kind" value={kind} onChange={setKind} options={PET_KINDS} />
         <Swatches label="Colour" value={color} colors={PET_COLORS} onChange={setColor} />
