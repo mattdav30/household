@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useStore } from '../../lib/store';
-import { api, changes, type PetKind, type Summary } from '../../lib/api';
+import { api, changes, type Summary } from '../../lib/api';
 import { todaysSession, TYPE_INFO } from '../../lib/plan';
 import { local } from '../../lib/local';
 import { weatherIcon } from '../../lib/weather';
@@ -11,7 +11,7 @@ import { friendly } from '../../lib/dates';
 import { Appear } from '../../components/Appear';
 import { Button, Card, Chips, ErrorBar, Field, Header, HeaderButton, Icon, IconBadge, Loading, SectionTitle, Swatches, styles as ui, tap } from '../../components/ui';
 import { Legend, LogSheet, WeekBars, kindIcon } from '../../components/fit';
-import { PET_COLORS, PET_KINDS, petLine } from '../../components/Pet';
+import { PET_COLORS, petLine } from '../../components/Pet';
 import { Pet3D } from '../../components/pet3d/Pet3D';
 
 const greeting = () => {
@@ -101,7 +101,7 @@ export default function Home() {
               <View style={{ backgroundColor: C.raised, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 9, maxWidth: '90%' }}>
                 <Text style={{ color: C.ink, fontSize: 15, fontWeight: '600', textAlign: 'center' }} accessibilityLiveRegion="polite">{line}</Text>
               </View>
-              <Pet3D kind={pet.kind} color={pet.color} mood={pet.mood} stage={pet.stage} size={230} celebrate={party}
+              <Pet3D kind="dog" color={pet.color} mood={pet.mood} stage={pet.stage} size={230} celebrate={party}
                 onTap={() => setSaid(pet.mood === 'sad' ? 'A walk would cheer me up.' : ['Hehe!', 'Again!', `I love you, ${me.name}.`, 'Walkies?'][Math.floor(Math.random() * 4)])} />
               <Text style={ui.h2}>{pet.name}</Text>
               <Text style={{ color: C.sub, fontSize: 13 }}>
@@ -229,7 +229,6 @@ export default function Home() {
 /** First run: meet the pet, name it, and pick where you start. */
 function Welcome() {
   const { summary, apply } = useStore();
-  const [kind, setKind] = useState<PetKind>(summary?.settings.pet_kind ?? 'cat');
   const [color, setColor] = useState(summary?.settings.pet_color ?? PET_COLORS[0].value);
   const [petName, setPetName] = useState('');
   const me = summary?.members.find((m) => m.id === summary.me);
@@ -243,18 +242,17 @@ function Welcome() {
     setBusy(true); setError(null);
     try {
       await api('/api/fit/profile', { method: 'PATCH', body: { step: Number(step) } });
-      apply(await api<Summary>('/api/fit/settings', { method: 'PATCH', body: { pet_name: petName.trim(), pet_kind: kind, pet_color: color } }));
+      apply(await api<Summary>('/api/fit/settings', { method: 'PATCH', body: { pet_name: petName.trim(), pet_kind: 'dog', pet_color: color } }));
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
-      <Header eyebrow="Welcome" title="Meet your pet" subtitle="You share one pet. Every day either of you moves for ten minutes, it gets fed and grows." />
+      <Header eyebrow="Welcome" title="Meet your pup" subtitle="You share one dog. Every day either of you moves for ten minutes, it gets fed and grows." />
       <View style={{ paddingHorizontal: S.lg, gap: S.lg }}>
         <View style={[ui.card, { alignItems: 'center' }]}>
-          <Pet3D kind={kind} color={color} mood="happy" stage={0} size={210} sleepy={false} />
+          <Pet3D kind="dog" color={color} mood="happy" stage={0} size={210} sleepy={false} />
         </View>
-        <Chips label="Kind" value={kind} onChange={setKind} options={PET_KINDS} />
         <Swatches label="Colour" value={color} colors={PET_COLORS} onChange={setColor} />
         <Field label="Name" value={petName} onChangeText={setPetName} placeholder="Mochi" maxLength={24} autoCapitalize="words" />
         <View style={{ gap: S.sm }}>

@@ -4,14 +4,14 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../lib/store';
 import { useSession } from '../lib/session';
-import { api, type PetKind, type Summary } from '../lib/api';
+import { api, type Summary } from '../lib/api';
 import { local } from '../lib/local';
 import { EQUIPMENT, type Equip } from '../lib/exercises';
 import { C, MODE, S, setMode } from '../lib/theme';
 import { ensurePermission } from '../lib/notify';
 import { connectHealth, healthState, openHealthSettings, type HealthState } from '../lib/health';
 import { Card, Chips, DateField, Field, Icon, SectionTitle, Swatches, Button, styles as ui, tap } from '../components/ui';
-import { PET_COLORS, PET_KINDS } from '../components/Pet';
+import { PET_COLORS } from '../components/Pet';
 import { Pet3D, pet3dStatus } from '../components/pet3d/Pet3D';
 
 export default function Settings() {
@@ -105,12 +105,11 @@ export default function Settings() {
       <SectionTitle>Your pet</SectionTitle>
       <Card style={{ gap: S.lg }}>
         <View style={{ alignItems: 'center' }}>
-          <Pet3D kind={summary.settings.pet_kind} color={summary.settings.pet_color} mood="happy" stage={summary.pet.stage} size={170} sleepy={false} />
+          <Pet3D kind="dog" color={summary.settings.pet_color} mood="happy" stage={summary.pet.stage} size={170} sleepy={false} />
           <Text style={{ color: C.faint, fontSize: 11 }}>3D: {status3d}</Text>
         </View>
         <Field label="Name" value={petName} onChangeText={setPetName} maxLength={24}
           onEndEditing={() => petName.trim() && save('/api/fit/settings', { pet_name: petName.trim() })} />
-        <Chips label="Kind" value={summary.settings.pet_kind} onChange={(v: PetKind) => save('/api/fit/settings', { pet_kind: v })} options={PET_KINDS} />
         <Swatches label="Colour" value={summary.settings.pet_color} colors={PET_COLORS} onChange={(v) => save('/api/fit/settings', { pet_color: v })} />
       </Card>
 
