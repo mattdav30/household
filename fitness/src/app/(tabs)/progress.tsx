@@ -8,9 +8,10 @@ import { deletePhoto, listPhotos, POSES, type Photo, type Pose } from '../../lib
 import { C, S } from '../../lib/theme';
 import { friendly, monthLabel, today } from '../../lib/dates';
 import { Appear } from '../../components/Appear';
+import { Legend, WeeksChart } from '../../components/fit';
 import { Button, Card, Chips, DateField, Field, Header, Icon, IconBadge, Segmented, SectionTitle, Sheet, styles as ui, tap } from '../../components/ui';
 
-type Tab = 'photos' | 'tape';
+type Tab = 'overview' | 'photos' | 'tape';
 const FIELDS: { key: keyof Measurement; label: string; unit: string }[] = [
   { key: 'waist_cm', label: 'Waist', unit: 'cm' },
   { key: 'hips_cm', label: 'Hips', unit: 'cm' },
@@ -22,18 +23,61 @@ const FIELDS: { key: keyof Measurement; label: string; unit: string }[] = [
 export default function Progress() {
   const router = useRouter();
   const { summary } = useStore();
-  const [tab, setTab] = useState<Tab>('photos');
+  const [tab, setTab] = useState<Tab>('overview');
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        <Header eyebrow="Check in monthly" title="Progress" subtitle="The tape measure and photos show change before the scale does."
+        <Header eyebrow="Little by little" title="Progress"
           right={<Pressable onPress={() => router.push('/history')} style={ui.headerBtn} accessibilityRole="button"><Icon name="history" size={19} color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700' }}>Log</Text></Pressable>} />
         <View style={{ paddingHorizontal: S.lg, gap: S.md }}>
-          <Segmented value={tab} onChange={setTab} options={[{ value: 'photos', label: 'Photos' }, { value: 'tape', label: 'Measurements' }]} />
-          {tab === 'photos' ? <Photos /> : summary ? <Tape me={summary.me} /> : null}
+          <Segmented value={tab} onChange={setTab} options={[{ value: 'overview', label: 'Overview' }, { value: 'photos', label: 'Photos' }, { value: 'tape', label: 'Tape' }]} />
+          {tab === 'overview' ? (summary ? <Overview /> : null) : tab === 'photos' ? <Photos /> : summary ? <Tape me={summary.me} /> : null}
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+function Overview() {
+  const { summary, color } = useStore();
+  if (!summary) return null;
+  const me = summary.members.find((m) => m.id === summary.me)!;
+  const eightWeeks = Object.fromEntries(summary.members.map((m) => [m.id, summary.weeks.reduce((a, w) => a + (w.by_user[m.id] ?? 0), 0)]));
+  const earned = summary.badges.filter((b) => b.earned).length;
+  return (
+    <>
+      <Appear index={0}>
+        <SectionTitle>Minutes per week</SectionTitle>
+        <Card style={{ gap: S.md }}>
+          <WeeksChart summary={summary} />
+          <Legend summary={summary} values={eightWeeks} unit="min in 8 weeks" />
+        </Card>
+      </Appear>
+      <Appear index={1}>
+        <View style={{ flexDirection: 'row', gap: S.md }}>
+          {summary.members.map((m) => (
+            <Card key={m.id} style={{ flex: 1, gap: 4 }}>
+              <Text style={{ color: color(m.id), fontWeight: '800' }}>{m.name}</Text>
+              <Text style={[ui.h2, ui.num]}>{m.active_days}</Text>
+              <Text style={{ color: C.sub, fontSize: 12 }}>days moved · best streak {summary.streaks[m.id]?.best ?? 0}</Text>
+              <Text style={{ color: C.sub, fontSize: 12 }}>Step {m.step}: {m.target} min</Text>
+            </Card>
+          ))}
+        </View>
+      </Appear>
+      <Appear index={2}>
+        <SectionTitle right={<Text style={{ color: C.sub, fontWeight: '700' }}>{earned} of {summary.badges.length}</Text>}>{me.name}'s badges</SectionTitle>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
+          {summary.badges.map((b) => (
+            <View key={b.id} style={[ui.card, { width: '48.5%', gap: 6, padding: S.md, opacity: b.earned ? 1 : 0.45 }]} accessibilityLabel={`${b.title}. ${b.desc}. ${b.earned ? 'Earned' : 'Locked'}`}>
+              <IconBadge name={(b.earned ? b.icon : 'lock-outline') as never} color={b.earned ? C.gold : C.faint} size={36} />
+              <Text style={ui.rowTitle}>{b.title}</Text>
+              <Text style={{ color: C.sub, fontSize: 12 }}>{b.desc}</Text>
+            </View>
+          ))}
+        </View>
+      </Appear>
+    </>
   );
 }
 

@@ -52,8 +52,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const me = summary.members.find((m) => m.id === summary.me);
     return {
       date: summary.today,
-      week: summary.week_index,
-      level: me?.level ?? 1,
+      step: me?.step ?? 1,
+      target: me?.target ?? 10,
       equipment: summary.settings.equipment as Equip[],
       quiet: local.quiet(),
       weather,

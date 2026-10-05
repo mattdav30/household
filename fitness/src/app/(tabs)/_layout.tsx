@@ -26,9 +26,8 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: C.bg },
       }}
     >
-      <Tabs.Screen name="index" options={tab('Today', 'white-balance-sunny', 'white-balance-sunny')} />
-      <Tabs.Screen name="train" options={tab('Train', 'dumbbell', 'dumbbell')} />
-      <Tabs.Screen name="journey" options={tab('Journey', 'map-outline', 'map')} />
+      <Tabs.Screen name="index" options={tab('Home', 'paw-outline', 'paw')} />
+      <Tabs.Screen name="moves" options={tab('Moves', 'walk', 'walk')} />
       <Tabs.Screen name="progress" options={tab('Progress', 'chart-line', 'chart-line')} />
     </Tabs>
   );

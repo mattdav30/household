@@ -67,47 +67,34 @@ export type Workout = {
   id: string; user_id: string; group_id: string | null; date: string; minutes: number; kind: string; title: string;
   effort: number; together: number; notes: string | null; created_at: number;
 };
-export type Stop = {
-  index: number; name: string; lat: number; lon: number; note: string; km: number; reached: boolean;
-  reward: string | null; claimed_at: number | null;
+export type Streak = { days: number; best: number; done_today: boolean; shields_left: number };
+export type FitMember = {
+  id: string; name: string; color: string; level: number; reminder_hour: number | null; evening_nudge: boolean;
+  step: number; target: number; step_since: string; hits_7: number; can_step_up: boolean; today_minutes: number; active_days: number;
 };
-export type Streak = { days: number; done_today: boolean; shields_left: number; last_shield: string | null };
-export type FitMember = { id: string; name: string; color: string; level: number; reminder_hour: number | null; active_days_28: number };
-export type JourneyState = {
-  id: string; route: string; title: string; start_date: string; end_date: string; finished_at: number | null;
-  stops: Stop[]; total_km: number; km: number; fraction: number; minutes: number; goal_minutes: number;
-  expected_fraction: number; next: number | null; km_per_minute: number;
-  week: number; total_weeks: number; days_left: number; complete: boolean; arrived: boolean; stops_reached: number;
+export type LadderStep = { step: number; target: number; title: string; tip: string };
+export type PetKind = 'cat' | 'dog' | 'bunny' | 'bear';
+export type Mood = 'new' | 'thrilled' | 'happy' | 'okay' | 'sad';
+export type Pet = {
+  name: string | null; kind: PetKind; color: string; mood: Mood; fed: Record<string, boolean>;
+  stage: number; stage_name: string; growth: number; next_stage_at: number | null;
 };
-export type Route = { id: string; title: string; blurb: string; total_km: number; stops: number; from: string; to: string };
-export type PastJourney = {
-  id: string; title: string; route: string; start_date: string; end_date: string; finished_at: number;
-  minutes: number; km: number; total_km: number; fraction: number; arrived: boolean; stops_reached: number; stops: number; furthest: string;
-};
+export type Badge = { id: string; title: string; desc: string; icon: string; earned: boolean };
 export type Summary = {
   today: string;
   me: string;
-  settings: {
-    start_date: string; wedding_date: string; weekly_goal_min: number; jar_cents: number; jar_goal_cents: number;
-    equipment: string[]; default_stake: string; countdown_label: string; jar_label: string;
-  };
+  settings: { start_date: string; wedding_date: string; equipment: string[]; countdown_label: string; pet_name: string | null; pet_kind: PetKind; pet_color: string };
   members: FitMember[];
+  steps: LadderStep[];
   countdown: { label: string; date: string; days: number };
-  week_index: number;
-  week: { start: string; goal: number; by_user: Record<string, number>; total: number; days: { date: string; by_user: Record<string, number> }[] };
+  week: { start: string; by_user: Record<string, number>; total: number; days: { date: string; by_user: Record<string, number> }[] };
+  weeks: { start: string; by_user: Record<string, number> }[];
   streaks: Record<string, Streak>;
-  journey: JourneyState | null;
-  journeys_finished: number;
-  routes: Route[];
-  challenge: {
-    week_start: string; stake: string; by_user: Record<string, number>;
-    last: null | { week_start: string; stake: string; by_user: Record<string, number>; meal_id: string | null; winner: string | null; loser: string | null };
-  };
-  jar: { sessions: number; rate_cents: number; earned_cents: number; banked_cents: number; goal_cents: number; label: string };
+  pet: Pet;
+  badges: Badge[];
   recent: Workout[];
 };
 export type Measurement = {
   id: string; user_id: string; date: string; waist_cm: number | null; hips_cm: number | null; chest_cm: number | null;
   arm_cm: number | null; weight_kg: number | null; created_at: number;
 };
-export type JarEntry = { id: string; amount_cents: number; note: string | null; date: string; created_at: number };

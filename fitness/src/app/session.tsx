@@ -29,10 +29,10 @@ export default function SessionScreen() {
   const [phase, setPhase] = useState<Phase>('preview');
   const [elapsed, setElapsed] = useState(0);
 
-  // Doing it together uses the gentler of the two levels so you stay in sync.
+  // Doing it together uses the lower of your two steps so you stay in sync.
   const session = useMemo<Session | null>(() => {
-    const lowest = Math.min(...(summary?.members.map((m) => m.level) ?? [1]));
-    const p = planInput(together && partner ? { level: lowest, shuffle: Number(params.shuffle ?? 0) } : { shuffle: Number(params.shuffle ?? 0) });
+    const lowest = [...(summary?.members ?? [])].sort((a, b) => a.step - b.step)[0];
+    const p = planInput(together && partner && lowest ? { step: lowest.step, target: lowest.target, shuffle: Number(params.shuffle ?? 0) } : { shuffle: Number(params.shuffle ?? 0) });
     return p ? buildSession(type, p) : null;
   }, [planInput, type, together, partner, summary, params.shuffle]);
 
@@ -317,29 +317,26 @@ function Finish({ session, seconds, together, onDone }: { session: Session; seco
   };
 
   if (saved && summary) {
-    const sj = saved.journey;
-    const kmGained = sj ? Math.round(minutes * (together ? summary.members.length : 1) * sj.km_per_minute) : 0;
-    const newlyReached = sj && summary.journey?.id === sj.id ? sj.stops.filter((s) => s.reached && !summary.journey!.stops[s.index]?.reached) : [];
-    const next = sj && sj.next != null ? sj.stops[sj.next] : null;
     const streak = saved.streaks[saved.me];
-    const coin = !summary.streaks[summary.me]?.done_today && minutes >= 10;
+    const meAfter = saved.members.find((m) => m.id === saved.me)!;
+    const petName = saved.pet.name ?? 'Your pet';
+    const fedNow = !summary.pet.fed[summary.me] && saved.pet.fed[saved.me];
+    const grew = saved.pet.stage > summary.pet.stage;
+    const newBadges = saved.badges.filter((b) => b.earned && !summary.badges.find((x) => x.id === b.id)?.earned);
     return (
       <View style={{ flex: 1, backgroundColor: C.bg, padding: S.lg, paddingTop: insets.top + 60, paddingBottom: insets.bottom + S.lg }}>
         <Animated.View style={{ alignItems: 'center', gap: S.md, transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }], opacity: pop }}>
           <IconBadge name="party-popper" color={C.gold} size={84} />
           <Text style={[ui.h1, { textAlign: 'center' }]}>{minutes} minutes done</Text>
-          <Text style={[ui.headerSub, { textAlign: 'center' }]}>{together ? 'Logged for both of you.' : 'Every minute moves you both along.'}</Text>
+          <Text style={[ui.headerSub, { textAlign: 'center' }]}>{together ? 'Logged for both of you.' : 'Every minute counts.'}</Text>
         </Animated.View>
         <View style={{ gap: S.md, marginTop: S.xl }}>
-          {sj && !(summary.journey?.complete) ? (
-            <Earned icon="airplane" color={C.accent} title={`+${kmGained} km on ${sj.title}`}
-              sub={next ? `${(next.km - sj.km).toLocaleString()} km to ${next.name}` : `You reached ${sj.stops[sj.stops.length - 1].name}`} />
-          ) : null}
-          {newlyReached.map((s) => (
-            <Earned key={s.name} icon="map-marker-check" color={C.warm} title={`You reached ${s.name}`} sub={s.reward ? `Reward unlocked: ${s.reward}` : s.note} />
-          ))}
+          <Earned icon="paw" color={C.warm} title={fedNow ? `${petName} is fed` : `${petName} is happy`}
+            sub={grew ? `${petName} just grew! Go take a look.` : fedNow ? 'Thanks for the walk.' : 'Extra minutes make for a happier pet.'} />
+          <Earned icon="stairs-up" color={C.accent} title={meAfter.today_minutes >= meAfter.target ? 'Step done for today' : `${meAfter.target - meAfter.today_minutes} minutes left on your step`}
+            sub={`Step ${meAfter.step}: ${meAfter.target} minutes a day`} />
           <Earned icon="fire" color={C.gold} title={`${streak?.days ?? 0} day streak`} sub={streak?.days && streak.days > 1 ? 'Keep the chain going tomorrow.' : 'Day one of the chain.'} />
-          {coin ? <Earned icon="piggy-bank" color={C.green} title={`+${money(saved.jar.rate_cents)} in the fund`} sub={`${money(saved.jar.earned_cents - saved.jar.banked_cents)} ready to move to savings`} /> : null}
+          {newBadges.map((b) => <Earned key={b.id} icon="medal" color={C.gold} title={`Badge: ${b.title}`} sub={b.desc} />)}
         </View>
         <View style={{ flex: 1 }} />
         <Button title="Done" onPress={onDone} />
@@ -365,7 +362,7 @@ function Finish({ session, seconds, together, onDone }: { session: Session; seco
   );
 }
 
-function Earned({ icon, color, title, sub }: { icon: 'airplane' | 'map-marker-check' | 'fire' | 'piggy-bank'; color: string; title: string; sub?: string }) {
+function Earned({ icon, color, title, sub }: { icon: 'paw' | 'stairs-up' | 'fire' | 'medal'; color: string; title: string; sub?: string }) {
   return (
     <View style={[ui.card, { flexDirection: 'row', alignItems: 'center', gap: S.md, borderColor: tint(color, 0.4) }]}>
       <IconBadge name={icon} color={color} />

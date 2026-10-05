@@ -26,24 +26,24 @@ export type Session = {
 
 export type PlanInput = {
   date: string; // YYYY-MM-DD
-  week: number; // weeks of training since the very first day
-  level: number; // 1 easy start, 2 steady, 3 strong
+  step: number; // this person's step on the ladder, 1 to 8
+  target: number; // minutes a day for that step
   equipment: Equip[];
   quiet: boolean; // no jumping
   weather?: Weather | null;
   shuffle?: number;
 };
 
-export const TYPE_INFO: Record<SessionType, { label: string; short: string; icon: string; color: 'accent' | 'warm' | 'gold' | 'green'; blurb: string }> = {
-  strength: { short: 'Strength', label: 'Strength circuit', icon: 'arm-flex', color: 'accent', blurb: 'Full body circuit to build strength and shape.' },
-  hiit: { short: 'Cardio', label: 'Cardio and core', icon: 'heart-pulse', color: 'warm', blurb: 'Intervals that raise your heart rate, finished with core.' },
-  tabata: { short: 'Tabata', label: 'Tabata blast', icon: 'lightning-bolt', color: 'gold', blurb: '20 seconds hard, 10 seconds rest. Short and sharp.' },
-  stretch: { short: 'Stretch', label: 'Stretch and recover', icon: 'yoga', color: 'green', blurb: 'Easy mobility for rest days. Counts towards your streak.' },
-  partner: { short: 'Partner', label: 'Partner workout', icon: 'account-heart', color: 'warm', blurb: 'Built for two. High fives included.' },
-  walk: { short: 'Walk', label: 'Interval walk', icon: 'walk', color: 'green', blurb: 'Brisk walking with faster bursts. Outdoors, no gear.' },
-  stairs: { short: 'Stairs', label: 'Stair session', icon: 'stairs', color: 'gold', blurb: 'Climb, recover, repeat. Brisbane has great stairs.' },
-  dance: { short: 'Dance', label: 'Dance session', icon: 'music-note', color: 'accent', blurb: 'Practise your first dance, or put on a playlist and move. Every minute counts.' },
-  quick: { short: 'Ten min', label: 'Ten minute floor', icon: 'timer-sand', color: 'accent', blurb: 'Low on drive? Ten minutes keeps the streak alive.' },
+export const TYPE_INFO: Record<SessionType, { label: string; short: string; icon: string; color: 'accent' | 'warm' | 'gold' | 'green'; blurb: string; unlock: number }> = {
+  strength: { short: 'Strength', label: 'Strength circuit', icon: 'arm-flex', color: 'accent', blurb: 'Full body circuit to build strength and shape.', unlock: 5 },
+  hiit: { short: 'Cardio', label: 'Cardio and core', icon: 'heart-pulse', color: 'warm', blurb: 'Intervals that raise your heart rate, finished with core.', unlock: 6 },
+  tabata: { short: 'Tabata', label: 'Tabata blast', icon: 'lightning-bolt', color: 'gold', blurb: '20 seconds hard, 10 seconds rest. Short and sharp.', unlock: 7 },
+  stretch: { short: 'Stretch', label: 'Stretch and recover', icon: 'yoga', color: 'green', blurb: 'Easy mobility for rest days. Counts towards your streak.', unlock: 1 },
+  partner: { short: 'Partner', label: 'Partner workout', icon: 'account-heart', color: 'warm', blurb: 'Built for two. High fives included.', unlock: 5 },
+  walk: { short: 'Walk', label: 'Walk', icon: 'walk', color: 'green', blurb: 'A timed walk at your step. Faster bursts come in as you climb.', unlock: 1 },
+  stairs: { short: 'Stairs', label: 'Stair session', icon: 'stairs', color: 'gold', blurb: 'Climb, recover, repeat. Brisbane has great stairs.', unlock: 6 },
+  dance: { short: 'Dance', label: 'Dance session', icon: 'music-note', color: 'accent', blurb: 'Practise your first dance, or put on a playlist and move. Every minute counts.', unlock: 1 },
+  quick: { short: 'Ten min', label: 'Ten minute home workout', icon: 'timer-sand', color: 'accent', blurb: 'Gentle moves in the lounge room. Ten minutes, start to finish.', unlock: 4 },
 };
 
 /** Free outdoor spots around Brisbane. */
@@ -75,20 +75,19 @@ const pickN = <T,>(arr: T[], n: number, r: () => number) => {
 };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/**
- * 0 on day one for an easy starter. Climbs steadily over the first 30 weeks, then keeps creeping up
- * for another year, so the workouts keep pace with you long after the wedding.
- */
-export function difficulty(week: number, level: number) {
-  return clamp(week / 30, 0, 1) + clamp((week - 30) / 52, 0, 0.5) + (clamp(level, 1, 3) - 1) * 0.35;
+/** 0 at step one, about 1.6 at step eight. Sessions get longer and harder as you climb. */
+export function difficulty(step: number) {
+  return ((clamp(step, 1, 8) - 1) / 7) * 1.6;
 }
+/** Which harder moves are allowed: steps 1 to 5 keep to the gentle ones. */
+const moveLevel = (step: number) => (step <= 5 ? 1 : step <= 7 ? 2 : 3);
 
 function pool(p: PlanInput, area: Area | Area[], opts: { partner?: boolean } = {}) {
   const areas = Array.isArray(area) ? area : [area];
   const have = new Set<Equip>(['none', ...p.equipment]);
   return EXERCISES.filter((e) => areas.includes(e.area)
     && have.has(e.equip)
-    && (e.level ?? 1) <= p.level + (p.week >= 16 ? 1 : 0)
+    && (e.level ?? 1) <= moveLevel(p.step)
     && !(p.quiet && e.impact === 'high')
     && !!e.partner === !!opts.partner);
 }
@@ -124,7 +123,7 @@ function circuit(p: PlanInput, r: () => number, moves: Exercise[], rounds: numbe
 
 export function buildSession(type: SessionType, p: PlanInput): Session {
   const r = rng(`${p.date}:${type}:${p.shuffle ?? 0}`);
-  const d = difficulty(p.week, p.level);
+  const d = difficulty(p.step);
   const info = TYPE_INFO[type];
   const base = { type, title: info.label, blurb: info.blurb, outdoor: false, partner: false, logKind: 'home' };
   const pick = (area: Area, n = 1, partner = false) => pickN(pool(p, area, { partner }), n, r);
@@ -166,7 +165,7 @@ export function buildSession(type: SessionType, p: PlanInput): Session {
   }
 
   if (type === 'stretch') {
-    const moves = pickN(EXERCISES.filter((e) => e.area === 'mobility' && (e.equip === 'none' || p.equipment.includes(e.equip))), 9, r);
+    const moves = pickN(EXERCISES.filter((e) => e.area === 'mobility' && (e.equip === 'none' || p.equipment.includes(e.equip))), 6 + Math.round(d * 2), r);
     const hold = 45 + Math.round(d * 10);
     const steps: Step[] = [{ name: 'March on the spot', seconds: 60, kind: 'warm', exId: 'march' }, ...moves.map((e) => ({
       name: e.name, seconds: e.sides ? hold * 2 : hold, kind: 'move' as const, exId: e.id, cue: e.sides ? 'Switch sides halfway' : 'Breathe slowly',
@@ -183,17 +182,27 @@ export function buildSession(type: SessionType, p: PlanInput): Session {
   }
 
   if (type === 'walk') {
-    const jog = d >= 0.6;
-    const intervals = 4 + Math.round(d * 3);
-    const fast = 60 + Math.round(d * 30);
-    const steps: Step[] = [{ name: 'Easy walk', seconds: 300, kind: 'warm', cue: 'Loosen up. Comfortable pace.' }];
-    for (let i = 0; i < intervals; i++) {
-      steps.push({ name: 'Brisk walk', seconds: 180, kind: 'move', cue: `Interval ${i + 1} of ${intervals}. Walk like you are late for a train.` });
-      steps.push({ name: jog ? 'Easy jog' : 'Fast walk', seconds: fast, kind: 'work', cue: jog ? 'Gentle jog. You should still be able to talk.' : 'As fast as you can walk, arms pumping.' });
+    // Matches your step: a plain walk at first, faster bursts from step three, walk jog from step seven.
+    const total = Math.max(10, p.target) * 60;
+    const steps: Step[] = [{ name: 'Easy start', seconds: 120, kind: 'warm', cue: 'Comfortable pace. Loosen up.' }];
+    const middle = total - 240;
+    if (p.step <= 2) {
+      steps.push({ name: 'Walk', seconds: middle, kind: 'move', cue: 'Steady pace you could keep talking at.' });
+    } else {
+      const jog = p.step >= 7;
+      const burst = jog ? 60 : 45;
+      const block = 180 + burst;
+      const blocks = Math.max(1, Math.floor(middle / block));
+      for (let i = 0; i < blocks; i++) {
+        steps.push({ name: 'Walk', seconds: 180, kind: 'move', cue: `Steady pace. Burst ${i + 1} of ${blocks} coming up.` });
+        steps.push({ name: jog ? 'Easy jog' : 'Fast walk', seconds: burst, kind: 'work', cue: jog ? 'Gentle jog. Slow is fine.' : 'Walk like you are late for a train.' });
+      }
+      const leftover = middle - blocks * block;
+      if (leftover >= 30) steps.push({ name: 'Walk', seconds: leftover, kind: 'move', cue: 'Steady pace.' });
     }
-    steps.push({ name: 'Easy walk', seconds: 300, kind: 'cool', cue: 'Bring your breathing back down.' });
+    steps.push({ name: 'Slow down', seconds: 120, kind: 'cool', cue: 'Ease off and let your breathing settle.' });
     const place = pickN(PLACES.filter((x) => x.for.includes('walk')), 1, r)[0];
-    return { ...base, title: jog ? 'Walk jog intervals' : info.label, outdoor: true, logKind: jog ? 'jog' : 'walk', steps, minutes: minutesOf(steps), place };
+    return { ...base, title: p.step >= 7 ? 'Walk jog' : p.step >= 3 ? 'Walk with bursts' : 'Walk', outdoor: true, logKind: p.step >= 7 ? 'jog' : 'walk', steps, minutes: minutesOf(steps), place };
   }
 
   if (type === 'stairs') {
@@ -214,7 +223,7 @@ export function buildSession(type: SessionType, p: PlanInput): Session {
   }
 
   if (type === 'dance') {
-    const songs = 4 + Math.round(d * 2);
+    const songs = 2 + Math.round(d * 2);
     const steps: Step[] = [...warmUp().slice(0, 4)];
     for (let i = 0; i < songs; i++) {
       steps.push({ name: i % 2 ? 'Full run through' : 'Work on the tricky part', seconds: 240, kind: 'work', cue: `Song ${i + 1} of ${songs}. Your first dance song, or anything you love.` });
@@ -235,25 +244,33 @@ export function buildSession(type: SessionType, p: PlanInput): Session {
   return { ...base, steps, minutes: minutesOf(steps), note: 'Ten minutes is a win. Keep going if you feel good.' };
 }
 
-// Monday to Sunday rhythm, with Thursday and Sunday kept light.
-const WEEK: SessionType[] = ['strength', 'walk', 'hiit', 'stretch', 'partner', 'stairs', 'dance'];
-const INDOOR_SWAP: Partial<Record<SessionType, SessionType>> = { walk: 'tabata', stairs: 'strength' };
+// What today looks like at each step. Walks first, home workouts join from step four.
+const WEEK_BY_STEP: SessionType[][] = [
+  ['walk', 'walk', 'walk', 'walk', 'walk', 'walk', 'walk'],
+  ['walk', 'walk', 'walk', 'walk', 'walk', 'walk', 'walk'],
+  ['walk', 'walk', 'walk', 'stretch', 'walk', 'walk', 'walk'],
+  ['walk', 'walk', 'quick', 'walk', 'walk', 'walk', 'stretch'],
+  ['strength', 'walk', 'walk', 'quick', 'walk', 'walk', 'stretch'],
+  ['strength', 'walk', 'hiit', 'stretch', 'partner', 'stairs', 'walk'],
+  ['strength', 'walk', 'hiit', 'stretch', 'partner', 'stairs', 'walk'],
+  ['strength', 'walk', 'tabata', 'stretch', 'partner', 'stairs', 'hiit'],
+];
 
-export function dayType(date: string): SessionType {
+export function dayType(date: string, step: number): SessionType {
   const [y, m, dd] = date.split('-').map(Number);
   const dow = (new Date(y, m - 1, dd).getDay() + 6) % 7;
-  return WEEK[dow];
+  return WEEK_BY_STEP[clamp(step, 1, 8) - 1][dow];
 }
 
-/** Today's planned session, swapped indoors when the weather is bad. */
+/** Today's suggestion, moved indoors when the weather is bad. */
 export function todaysSession(p: PlanInput): { session: Session; swapped: string | null } {
-  const planned = dayType(p.date);
+  const planned = dayType(p.date, p.step);
   const w = p.weather;
   let type = planned;
   let swapped: string | null = null;
   if (w && (planned === 'walk' || planned === 'stairs') && (w.rainChance >= 60 || w.maxTemp >= 34)) {
-    type = INDOOR_SWAP[planned]!;
-    swapped = w.rainChance >= 60 ? `Rain is likely today (${w.rainChance}%), so this moved indoors.` : `${w.maxTemp}°C forecast, so this moved indoors.`;
+    type = p.step >= 4 ? 'quick' : 'dance';
+    swapped = w.rainChance >= 60 ? `Rain is likely today (${w.rainChance}%), so here is an indoor option.` : `${w.maxTemp}°C forecast, so here is an indoor option.`;
   }
   const session = buildSession(type, p);
   if (session.outdoor && w && w.maxTemp >= 28) {
@@ -262,4 +279,4 @@ export function todaysSession(p: PlanInput): { session: Session; swapped: string
   return { session, swapped };
 }
 
-export const ALL_TYPES: SessionType[] = ['strength', 'hiit', 'tabata', 'partner', 'walk', 'stairs', 'stretch', 'dance', 'quick'];
+export const ALL_TYPES: SessionType[] = ['walk', 'stretch', 'dance', 'quick', 'strength', 'partner', 'hiit', 'stairs', 'tabata'];

@@ -58,7 +58,7 @@
             {
               "name": "Journey",
               "label": "Road to Tokyo",
-              "description": "Today's workout, your streak and the next stop",
+              "description": "Your pet, who has moved today and your step",
               "minWidth": "250dp",
               "minHeight": "110dp",
               "targetCellWidth": 4,

@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, Switch, Text, View } from 'react-native';
-import Svg, { Circle, G, Line, Path, Polyline, Text as SvgText } from 'react-native-svg';
+import { useEffect, useState } from 'react';
+import { Pressable, Switch, Text, View } from 'react-native';
 import { C, S, tint } from '../lib/theme';
-import { reduceMotion } from '../lib/motion';
-import { api, changes, type JourneyState, type Summary } from '../lib/api';
+import { api, changes, type Summary } from '../lib/api';
 import { today as todayIso, friendly } from '../lib/dates';
 import { useStore } from '../lib/store';
 import { Chips, Field, Icon, Sheet, styles as ui, tap, DateField, type IconName } from './ui';
-import { TYPE_INFO, type SessionType } from '../lib/plan';
 
 export const accentOf = (c: 'accent' | 'warm' | 'gold' | 'green') => ({ accent: C.accent, warm: C.warm, gold: C.gold, green: C.green })[c];
 
@@ -37,18 +34,6 @@ export function WeekBars({ summary, height = 76 }: { summary: Summary; height?: 
   );
 }
 
-/** A thin progress bar split by person. */
-export function SplitBar({ summary, values, goal }: { summary: Summary; values: Record<string, number>; goal: number }) {
-  const { color } = useStore();
-  return (
-    <View style={{ height: 12, borderRadius: 6, backgroundColor: C.raised, flexDirection: 'row', overflow: 'hidden' }}>
-      {summary.members.map((m) => (
-        <View key={m.id} style={{ width: `${Math.min(100, ((values[m.id] ?? 0) / Math.max(1, goal)) * 100)}%`, backgroundColor: color(m.id) }} />
-      ))}
-    </View>
-  );
-}
-
 export function Legend({ summary, values, unit = 'min' }: { summary: Summary; values: Record<string, number>; unit?: string }) {
   const { color } = useStore();
   return (
@@ -59,139 +44,6 @@ export function Legend({ summary, values, unit = 'min' }: { summary: Summary; va
           <Text style={{ color: C.sub, fontSize: 13 }}>{m.name} <Text style={{ color: C.ink, fontWeight: '700' }}>{values[m.id] ?? 0} {unit}</Text></Text>
         </View>
       ))}
-    </View>
-  );
-}
-
-/** Route from Brisbane to the onsen, drawn from the stop coordinates. The travelled part glows. */
-export function RouteMap({ journey, height = 300, onStop }: { journey: JourneyState; height?: number; onStop?: (i: number) => void }) {
-  const [w, setW] = useState(0);
-  const { stops, km } = journey;
-  const pts = useMemo(() => {
-    if (!w) return [];
-    const lats = stops.map((s) => s.lat);
-    const lons = stops.map((s) => s.lon);
-    const pad = 26;
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLon = Math.min(...lons), maxLon = Math.max(...lons);
-    const sx = (w - pad * 2) / (maxLon - minLon);
-    const sy = (height - pad * 2) / (maxLat - minLat);
-    return stops.map((s) => ({ x: pad + (s.lon - minLon) * sx, y: height - pad - (s.lat - minLat) * sy }));
-  }, [w, height, stops]);
-
-  // Position of the marker between stops.
-  let marker = pts[0];
-  const travelled: { x: number; y: number }[] = pts.length ? [pts[0]] : [];
-  for (let i = 1; i < pts.length; i++) {
-    const a = stops[i - 1], b = stops[i];
-    if (km >= b.km) { travelled.push(pts[i]); marker = pts[i]; continue; }
-    const t = Math.max(0, (km - a.km) / Math.max(1, b.km - a.km));
-    marker = { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t };
-    travelled.push(marker);
-    break;
-  }
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (reduceMotion()) return;
-    const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: true }));
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
-  return (
-    <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ height, borderRadius: 16, backgroundColor: C.raised, overflow: 'hidden' }}
-      accessibilityLabel={`Map. ${km} of ${journey.total_km} kilometres travelled.`}>
-      {w ? (
-        <Svg width={w} height={height}>
-          {Array.from({ length: 6 }, (_, i) => (
-            <Line key={i} x1={0} x2={w} y1={(height / 6) * i + 20} y2={(height / 6) * i + 20} stroke={C.line} strokeWidth={1} strokeDasharray="2 6" />
-          ))}
-          <Polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke={C.faint} strokeWidth={2} strokeDasharray="4 5" />
-          <Polyline points={travelled.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke={C.accent} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-          {pts.map((p, i) => {
-            const st = stops[i];
-            const last = i === pts.length - 1;
-            const labelLeft = p.x > w * 0.62;
-            return (
-              <G key={`${st.name}${i}`} onPress={onStop ? () => onStop(i) : undefined}>
-                <Circle cx={p.x} cy={p.y} r={last ? 8 : 5} fill={st.reached ? (last ? C.gold : C.accent) : C.card} stroke={last ? C.gold : st.reward ? C.warm : C.faint} strokeWidth={2} />
-                {(i % 2 === 0 || last || i === journey.next) ? (
-                  <SvgText x={labelLeft ? p.x - 10 : p.x + 10} y={p.y + 4} fontSize={10} fontWeight="700" fill={st.reached ? C.ink : C.sub} textAnchor={labelLeft ? 'end' : 'start'}>{st.name}</SvgText>
-                ) : null}
-              </G>
-            );
-          })}
-          {marker ? <Circle cx={marker.x} cy={marker.y} r={7} fill={C.warm} stroke={C.bg} strokeWidth={2} /> : null}
-        </Svg>
-      ) : null}
-      {marker && w && !reduceMotion() ? (
-        <Animated.View pointerEvents="none" style={{
-          position: 'absolute', left: marker.x - 16, top: marker.y - 16, width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: C.warm,
-          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
-          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.4] }) }],
-        }} />
-      ) : null}
-    </View>
-  );
-}
-
-/** Spinning wheel that picks a session when nobody wants to choose. */
-export function Wheel({ options, onPicked }: { options: SessionType[]; onPicked: (t: SessionType) => void }) {
-  const size = 260;
-  const r = size / 2;
-  const spin = useRef(new Animated.Value(0)).current;
-  const [busy, setBusy] = useState(false);
-  const turns = useRef(0);
-  const seg = 360 / options.length;
-
-  const go = () => {
-    if (busy) return;
-    tap();
-    setBusy(true);
-    const pick = Math.floor(Math.random() * options.length);
-    // The pointer sits at the top. Land the middle of the picked slice under it.
-    const target = turns.current + 4 * 360 + (360 - (pick * seg + seg / 2)) - (turns.current % 360);
-    turns.current = target;
-    const done = () => { setBusy(false); onPicked(options[pick]); };
-    if (reduceMotion()) { spin.setValue(target); done(); return; }
-    Animated.timing(spin, { toValue: target, duration: 3200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(done);
-  };
-
-  const slice = (i: number) => {
-    const a0 = ((i * seg - 90) * Math.PI) / 180;
-    const a1 = (((i + 1) * seg - 90) * Math.PI) / 180;
-    return `M ${r} ${r} L ${r + r * Math.cos(a0)} ${r + r * Math.sin(a0)} A ${r} ${r} 0 0 1 ${r + r * Math.cos(a1)} ${r + r * Math.sin(a1)} Z`;
-  };
-
-  return (
-    <View style={{ alignItems: 'center', gap: S.lg }}>
-      <View style={{ width: size, height: size + 14 }}>
-        <View style={{ position: 'absolute', top: 0, left: r - 12, zIndex: 2 }}>
-          <Icon name="menu-down" size={34} color={C.ink} />
-        </View>
-        <Animated.View style={{ marginTop: 14, transform: [{ rotate: spin.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }] }}>
-          <Svg width={size} height={size}>
-            {options.map((t, i) => {
-              const info = TYPE_INFO[t];
-              const mid = ((i * seg + seg / 2 - 90) * Math.PI) / 180;
-              const col = accentOf(info.color);
-              return (
-                <G key={t}>
-                  <Path d={slice(i)} fill={tint(col, i % 2 ? 0.28 : 0.45)} stroke={C.bg} strokeWidth={2} />
-                  <SvgText x={r + r * 0.62 * Math.cos(mid)} y={r + r * 0.62 * Math.sin(mid) + 4} fontSize={11} fontWeight="800" fill={C.ink} textAnchor="middle"
-                    transform={`rotate(${i * seg + seg / 2}, ${r + r * 0.62 * Math.cos(mid)}, ${r + r * 0.62 * Math.sin(mid)})`}>
-                    {info.short}
-                  </SvgText>
-                </G>
-              );
-            })}
-            <Circle cx={r} cy={r} r={24} fill={C.card} stroke={C.line} strokeWidth={2} />
-          </Svg>
-        </Animated.View>
-      </View>
-      <Pressable onPress={go} disabled={busy} accessibilityRole="button" accessibilityLabel="Spin the wheel"
-        style={({ pressed }) => [ui.btn, { backgroundColor: C.accent, alignSelf: 'stretch', opacity: pressed || busy ? 0.7 : 1 }]}>
-        <Text style={[ui.btnText, { color: C.onAccent }]}>{busy ? 'Spinning…' : 'Spin'}</Text>
-      </Pressable>
     </View>
   );
 }
@@ -278,6 +130,33 @@ export function Stat({ value, label, color = C.ink, icon }: { value: string; lab
         <Text style={[{ fontSize: 24, fontWeight: '800', color, letterSpacing: -0.5 }, ui.num]}>{value}</Text>
       </View>
       <Text style={{ fontSize: 12, color: C.sub, fontWeight: '600' }}>{label}</Text>
+    </View>
+  );
+}
+
+/** Eight weeks of minutes, one stacked bar per week. */
+export function WeeksChart({ summary, height = 110 }: { summary: Summary; height?: number }) {
+  const { color } = useStore();
+  const totals = summary.weeks.map((w) => Object.values(w.by_user).reduce((a, b) => a + b, 0));
+  const max = Math.max(60, ...totals);
+  return (
+    <View style={{ gap: 6 }} accessibilityLabel={`Minutes per week for the last eight weeks: ${totals.join(', ')}`}>
+      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-end', height }}>
+        {summary.weeks.map((w, i) => (
+          <View key={w.start} style={{ flex: 1, height, justifyContent: 'flex-end' }}>
+            <View style={{ borderRadius: 6, overflow: 'hidden', backgroundColor: totals[i] ? 'transparent' : C.raised, minHeight: 4 }}>
+              {summary.members.map((m) => {
+                const v = w.by_user[m.id] ?? 0;
+                return v ? <View key={m.id} style={{ height: (v / max) * height, backgroundColor: i === summary.weeks.length - 1 ? color(m.id) : tint(color(m.id), 0.7) }} /> : null;
+              })}
+            </View>
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ color: C.faint, fontSize: 11 }}>8 weeks ago</Text>
+        <Text style={{ color: C.faint, fontSize: 11 }}>This week</Text>
+      </View>
     </View>
   );
 }
