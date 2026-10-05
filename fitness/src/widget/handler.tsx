@@ -1,5 +1,5 @@
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { JourneyWidget } from './JourneyWidget';
+import { PetWidget } from './PetWidget';
 import { loadWidgetData } from './data';
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
@@ -9,8 +9,8 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_RESIZED': {
       const { data, message } = await loadWidgetData();
       props.renderWidget({
-        light: <JourneyWidget data={data} message={message} mode="light" />,
-        dark: <JourneyWidget data={data} message={message} mode="dark" />,
+        light: <PetWidget data={data} message={message} mode="light" />,
+        dark: <PetWidget data={data} message={message} mode="dark" />,
       });
       break;
     }

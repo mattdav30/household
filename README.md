@@ -12,7 +12,7 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 | Over the air updates | Expo EAS Update, run by the Expo workflow in `app/.eas/workflows/update.yml` | Free plan |
 | Push notifications | Expo push service through Firebase Cloud Messaging | Free |
 
-## Road to Tokyo (fitness app)
+## Tandem (fitness app)
 
 A second Android app in `fitness/` for moving together. It signs in with the same Household accounts and talks to the same API, under `/api/fit`.
 
@@ -22,7 +22,7 @@ A second Android app in `fitness/` for moving together. It signs in with the sam
 * The API lives in `worker/src/fitness.ts`, with tables from the `000x_fitness` migrations.
 * Progress photos stay on each phone in the app's private folder. They never reach the server.
 * Reminders (morning, 6pm nudge, Sunday recap, monthly check in) are scheduled on the phone, so the app needs no Firebase setup.
-* Builds run on Expo: project `roadtotokyo`, linked to this repository with base directory `fitness`.
+* Builds run on Expo: project `tandem`, linked to this repository with base directory `fitness`.
 
 ## Everyday use
 

@@ -1,4 +1,4 @@
-// Road to Tokyo: the fitness side of the API. Same accounts and households as Household,
+// Tandem: the fitness side of the API. Same accounts and households as Household,
 // mounted under /api/fit so the generic list routes never see these paths.
 // The app is a simple tracker with a shared pet. Each person climbs a ladder of small steps,
 // starting from a ten minute walk.

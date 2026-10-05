@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "Road to Tokyo",
-    "slug": "roadtotokyo",
+    "name": "Tandem",
+    "slug": "tandem",
     "owner": "metheni",
-    "scheme": "roadtotokyo",
+    "scheme": "tandem",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "android": {
-      "package": "com.mattdav30.roadtotokyo",
+      "package": "com.mattdav30.tandem",
       "adaptiveIcon": {
         "backgroundColor": "#14122B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -33,7 +33,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Road to Tokyo uses the camera for your private progress photos. Photos stay on this phone.",
+          "cameraPermission": "Tandem uses the camera for your private progress photos. Photos stay on this phone.",
           "recordAudioAndroid": false
         }
       ],
@@ -56,8 +56,8 @@
         {
           "widgets": [
             {
-              "name": "Journey",
-              "label": "Road to Tokyo",
+              "name": "Pet",
+              "label": "Tandem",
               "description": "Your pet, who has moved today and your step",
               "minWidth": "250dp",
               "minHeight": "110dp",

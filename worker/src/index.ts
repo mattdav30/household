@@ -497,7 +497,7 @@ app.post('/api/shopping_items/clear-checked', async (c) => {
   return c.json({ deleted: ticked.results.length, moved });
 });
 
-// ---------- Road to Tokyo (fitness app) ----------
+// ---------- Tandem (fitness app) ----------
 // Registered before the generic routes so /api/fit/... never matches /api/:table/:id.
 registerFitness(app);
 

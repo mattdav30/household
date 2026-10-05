@@ -16,13 +16,13 @@ const PALETTE: Record<'dark' | 'light', Record<'bg' | 'ink' | 'sub' | 'accent' |
 };
 
 /** Home screen widget: how the pet feels, who has fed it today, and your step progress. */
-export function JourneyWidget({ data, mode, message }: { data: WidgetData | null; mode: 'dark' | 'light'; message?: string }) {
+export function PetWidget({ data, mode, message }: { data: WidgetData | null; mode: 'dark' | 'light'; message?: string }) {
   const c = PALETTE[mode];
   return (
-    <FlexWidget clickAction="OPEN_APP" accessibilityLabel="Road to Tokyo"
+    <FlexWidget clickAction="OPEN_APP" accessibilityLabel="Tandem"
       style={{ height: 'match_parent', width: 'match_parent', backgroundColor: c.bg, borderRadius: 22, padding: 14, flexDirection: 'column', flexGap: 8 }}>
       <FlexWidget style={{ flexDirection: 'row', width: 'match_parent', alignItems: 'center' }}>
-        <TextWidget text={data ? data.label : 'ROAD TO TOKYO'} style={{ fontSize: 11, color: c.accent, fontWeight: '700', letterSpacing: 0.08 }} />
+        <TextWidget text={data ? data.label : 'TANDEM'} style={{ fontSize: 11, color: c.accent, fontWeight: '700', letterSpacing: 0.08 }} />
         <FlexWidget style={{ flex: 1 }} />
         {data ? <TextWidget text={`${data.streak} day streak`} style={{ fontSize: 12, color: c.gold, fontWeight: '700' }} /> : null}
       </FlexWidget>

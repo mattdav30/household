@@ -39,7 +39,7 @@ export default function Home() {
   if (!summary || !plan) {
     return (
       <View style={{ flex: 1 }}>
-        <Header title="Road to Tokyo" />
+        <Header title="Tandem" />
         <ErrorBar error={error} />
         {!error ? <Loading rows={4} /> : <View style={{ padding: S.lg }}><Button title="Try again" onPress={refresh} kind="soft" /></View>}
       </View>

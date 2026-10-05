@@ -45,7 +45,7 @@ export default function Login() {
           <Icon name="airplane-takeoff" size={32} color={C.onAccent} />
         </View>
         <View>
-          <Text style={ui.h1}>Road to Tokyo</Text>
+          <Text style={ui.h1}>Tandem</Text>
           <Text style={[ui.headerSub, { fontSize: 16 }]}>Small steps together, with a pet to look after. Use the same email and password as Household.</Text>
         </View>
 

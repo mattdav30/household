@@ -1,14 +1,14 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { api, loadToken, type Summary } from '../lib/api';
-import type { WidgetData } from './JourneyWidget';
+import type { WidgetData } from './PetWidget';
 
 const CACHE = 'rtt_widget_cache';
 const MOOD: Record<string, string> = { new: 'is excited to meet you', thrilled: 'is over the moon', happy: 'is happy', okay: 'is doing okay', sad: 'misses your walks' };
 
 export async function loadWidgetData(): Promise<{ data: WidgetData | null; message?: string }> {
   const token = await loadToken();
-  if (!token) return { data: null, message: 'Open Road to Tokyo and sign in.' };
+  if (!token) return { data: null, message: 'Open Tandem and sign in.' };
   try {
     const s = await api<Summary>('/api/fit/summary');
     const me = s.members.find((m) => m.id === s.me)!;
