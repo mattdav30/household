@@ -5,6 +5,7 @@ import {
 } from './lib';
 import { expandEvents } from './recur';
 import { holidayEvents } from './holidays';
+import { registerFitness } from './fitness';
 import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, normIngredients, sameThing, type Ingredient } from './food';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string };
@@ -495,6 +496,10 @@ app.post('/api/shopping_items/clear-checked', async (c) => {
   await db.batch(stmts);
   return c.json({ deleted: ticked.results.length, moved });
 });
+
+// ---------- Road to Tokyo (fitness app) ----------
+// Registered before the generic routes so /api/fit/... never matches /api/:table/:id.
+registerFitness(app);
 
 // ---------- Generic list / create / update / delete ----------
 

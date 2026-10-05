@@ -1,0 +1,15 @@
+# Sends screen and logic changes to both phones over the air.
+# Runs on Expo's servers on every push to main. Phones download the update
+# in the background and apply it the next time the app opens.
+name: Send app update
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  publish_update:
+    name: Publish update to production
+    type: update
+    params:
+      branch: production

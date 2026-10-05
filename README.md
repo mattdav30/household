@@ -12,6 +12,16 @@ A private Android app for two people: shopping list, meal planner with recipes, 
 | Over the air updates | Expo EAS Update, run by the Expo workflow in `app/.eas/workflows/update.yml` | Free plan |
 | Push notifications | Expo push service through Firebase Cloud Messaging | Free |
 
+## Road to Tokyo (fitness app)
+
+A second Android app in `fitness/` for working out together before the wedding. It signs in with the same Household accounts and talks to the same API, under `/api/fit`.
+
+* Workouts are built on the phone from `fitness/src/lib/exercises.ts` and `fitness/src/lib/plan.ts`. No gym or pool needed.
+* The API lives in `worker/src/fitness.ts`, with tables from `worker/migrations/0004_fitness.sql`.
+* Progress photos stay on each phone in the app's private folder. They never reach the server.
+* Reminders are scheduled on the phone, so the app needs no Firebase setup.
+* Builds run on Expo: project `road-to-tokyo`, linked to this repository with base directory `fitness`.
+
 ## Everyday use
 
 * Change screens or logic under `app/src`, push to `main`, and both phones pick up the update on next launch.

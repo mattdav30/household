@@ -7,3 +7,5 @@ app/ios/
 worker/.wrangler/
 *.log
 .DS_Store
+fitness/android/
+fitness/ios/

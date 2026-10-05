@@ -1,0 +1,85 @@
+{
+  "expo": {
+    "name": "Road to Tokyo",
+    "slug": "road-to-tokyo",
+    "owner": "metheni",
+    "scheme": "roadtotokyo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.mattdav30.roadtotokyo",
+      "adaptiveIcon": {
+        "backgroundColor": "#14122B",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
+        "CAMERA",
+        "WAKE_LOCK"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Road to Tokyo uses the camera for your private progress photos. Photos stay on this phone.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#14122B",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#8B93FF"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "Journey",
+              "label": "Road to Tokyo",
+              "description": "Today's workout, your streak and the next stop",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widget-preview.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "apiUrl": "https://household-api.matthew-davenport30.workers.dev",
+      "eas": {}
+    }
+  }
+}
