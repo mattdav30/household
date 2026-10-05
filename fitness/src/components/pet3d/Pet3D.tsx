@@ -107,7 +107,17 @@ export function Pet3D({ kind, color, mood, stage, size = 220, celebrate = 0, sle
         width: w, height: h, style: {}, clientWidth: w, clientHeight: h,
         addEventListener: () => undefined, removeEventListener: () => undefined, getContext: () => gl,
       } as unknown as HTMLCanvasElement;
-      const renderer = new THREE.WebGLRenderer({ canvas, context: gl as unknown as WebGL2RenderingContext, antialias: true, alpha: true });
+      // Expo's WebGL 2 context inherits from the WebGL 1 class, which three.js reads as WebGL 1 and rejects.
+      // Hide the WebGL 1 class while the renderer starts so it sees the WebGL 2 context it really is.
+      const g = globalThis as unknown as { WebGLRenderingContext?: unknown };
+      const savedGL1 = g.WebGLRenderingContext;
+      if (Platform.OS !== 'web') g.WebGLRenderingContext = undefined;
+      let renderer: THREE.WebGLRenderer;
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas, context: gl as unknown as WebGL2RenderingContext, antialias: true, alpha: true });
+      } finally {
+        if (Platform.OS !== 'web') g.WebGLRenderingContext = savedGL1;
+      }
       renderer.setPixelRatio(1);
       renderer.setSize(w, h, false);
       renderer.setClearColor(0x000000, 0);
