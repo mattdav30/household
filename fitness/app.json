@@ -79,7 +79,17 @@
     },
     "extra": {
       "apiUrl": "https://household-api.matthew-davenport30.workers.dev",
-      "eas": {}
+      "eas": {
+        "projectId": "0f4a4726-e634-46a7-acd2-83dc688b0027"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0f4a4726-e634-46a7-acd2-83dc688b0027",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      },
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
