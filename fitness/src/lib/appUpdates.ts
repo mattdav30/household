@@ -61,3 +61,20 @@ export const applyUpdate = () => Updates.reloadAsync().catch(() => undefined);
 
 /** Opens the new build's install file. Android asks to confirm the install. */
 export const installRelease = (r: Release) => Linking.openURL(r.url);
+
+/** Short technical details for Settings, so a stuck update is easy to diagnose. */
+export async function updateDetails(): Promise<string> {
+  if (Platform.OS === 'web' || !Updates.isEnabled) return 'Updates are off in this build.';
+  const parts = [
+    `Channel ${Updates.channel ?? 'none'}`,
+    Updates.isEmbeddedLaunch ? 'install file code' : `update ${(Updates.updateId ?? '').slice(0, 8)}`,
+    Updates.createdAt ? `made ${Updates.createdAt.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` : '',
+  ];
+  if (Updates.isEmergencyLaunch) parts.push(`fell back: ${Updates.emergencyLaunchReason ?? 'unknown reason'}`);
+  try {
+    const logs = await Updates.readLogEntriesAsync(2 * 24 * 3600 * 1000);
+    const errs = logs.filter((l) => l.level === 'error' || l.level === 'fatal').slice(-2);
+    for (const e of errs) parts.push(`error: ${e.message.slice(0, 140)}`);
+  } catch { /* logs unavailable */ }
+  return parts.filter(Boolean).join(' · ');
+}
