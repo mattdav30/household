@@ -9,6 +9,7 @@ import { local } from '../lib/local';
 import { EQUIPMENT, type Equip } from '../lib/exercises';
 import { C, MODE, S, setMode } from '../lib/theme';
 import { ensurePermission } from '../lib/notify';
+import { applyUpdate, checkForUpdates, installRelease, installedVersion, runningSince } from '../lib/appUpdates';
 import { connectHealth, healthState, openHealthSettings, type HealthState } from '../lib/health';
 import { Card, Chips, DateField, Field, Icon, SectionTitle, Swatches, Button, styles as ui, tap } from '../components/ui';
 import { PET_COLORS } from '../components/Pet';
@@ -33,6 +34,17 @@ export default function Settings() {
   const countdownSaved = summary?.settings.countdown_label ?? '';
   useEffect(() => { setPetName(petNameSaved); }, [petNameSaved]);
   useEffect(() => { setCountdown(countdownSaved); }, [countdownSaved]);
+  const [updMsg, setUpdMsg] = useState<string | null>(null);
+  const [updAction, setUpdAction] = useState<null | (() => void)>(null);
+  const checkUpdates = async () => {
+    tap();
+    setUpdMsg('Checking…'); setUpdAction(null);
+    const s = await checkForUpdates();
+    if (s.release) { setUpdMsg(`Tandem ${s.release.version} is ready to install.`); setUpdAction(() => () => installRelease(s.release!)); }
+    else if (s.otaReady) { setUpdMsg('An update is downloaded and ready.'); setUpdAction(() => applyUpdate); }
+    else setUpdMsg('You have the latest version.');
+  };
+  const since = runningSince();
   const [status3d, setStatus3d] = useState(pet3dStatus);
   useEffect(() => { const t = setInterval(() => setStatus3d(pet3dStatus), 1500); return () => clearInterval(t); }, []);
   const toggleHealth = async (on: boolean) => {
@@ -127,6 +139,14 @@ export default function Settings() {
             <Toggle key={e.value} title={e.label} sub={e.note} value={equipment.has(e.value)} onChange={() => toggleEquip(e.value)} />
           ))}
         </View>
+      </Card>
+
+      <SectionTitle>App</SectionTitle>
+      <Card style={{ gap: S.md }}>
+        <Text style={ui.rowTitle}>Tandem {installedVersion()}</Text>
+        <Text style={ui.rowSub}>{since ? `Latest changes from ${since.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} ${since.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}` : 'Running the code from the install file'}</Text>
+        {updMsg ? <Text style={{ color: C.sub, fontSize: 13 }}>{updMsg}</Text> : null}
+        {updAction ? <Button title={updMsg?.includes('install') ? 'Install' : 'Restart now'} onPress={updAction} /> : <Button title="Check for updates" kind="soft" icon="refresh" onPress={checkUpdates} />}
       </Card>
 
       <Button title="Sign out" kind="danger" onPress={() => Alert.alert('Sign out?', 'Your progress photos stay on this phone.', [

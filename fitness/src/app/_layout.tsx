@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../lib/session';
 import { StoreProvider, useStore } from '../lib/store';
 import { refreshWidgetSoon } from '../widget/refresh';
+import { UpdateBanner } from '../components/UpdateBanner';
 import { C, MODE } from '../lib/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -41,12 +42,15 @@ function Gate() {
 
   if (!ready) return null;
   return (
+    <>
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.bg }, animation: 'slide_from_right' }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" options={{ animation: 'fade' }} />
       <Stack.Screen name="session" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="camera" options={{ animation: 'fade' }} />
     </Stack>
+    {profile ? <UpdateBanner /> : null}
+    </>
   );
 }
 

@@ -220,6 +220,12 @@ async function summary(env: Env, u: User) {
 export function registerFitness(app: App) {
   app.get('/api/fit/summary', async (c) => c.json(await summary(c.env, c.get('user'))));
 
+  // The newest installable build, so the app can offer an update without a trip to expo.dev.
+  app.get('/api/fit/app-release', async (c) => {
+    const r = await c.env.DB.prepare('SELECT version, url, notes FROM fit_app_release WHERE id = 1').first();
+    return c.json(r ?? null);
+  });
+
   app.get('/api/fit/workouts', async (c) => {
     const u = c.get('user');
     const before = c.req.query('before') ?? '9999-12-31';
