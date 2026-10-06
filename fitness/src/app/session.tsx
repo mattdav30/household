@@ -20,7 +20,7 @@ import { accentOf } from '../components/fit';
 type Phase = 'preview' | 'run' | 'finish' | 'done';
 
 export default function SessionScreen() {
-  const params = useLocalSearchParams<{ type?: string; shuffle?: string }>();
+  const params = useLocalSearchParams<{ type?: string; shuffle?: string; minutes?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { summary, planInput, partner } = useStore();
@@ -32,9 +32,10 @@ export default function SessionScreen() {
   // Doing it together uses the lower of your two steps so you stay in sync.
   const session = useMemo<Session | null>(() => {
     const lowest = [...(summary?.members ?? [])].sort((a, b) => a.step - b.step)[0];
-    const p = planInput(together && partner && lowest ? { step: lowest.step, target: lowest.target, shuffle: Number(params.shuffle ?? 0) } : { shuffle: Number(params.shuffle ?? 0) });
+    const extra = { shuffle: Number(params.shuffle ?? 0), ...(params.minutes ? { minutes: Number(params.minutes) } : {}) };
+    const p = planInput(together && partner && lowest ? { step: lowest.step, target: lowest.target, ...extra } : extra);
     return p ? buildSession(type, p) : null;
-  }, [planInput, type, together, partner, summary, params.shuffle]);
+  }, [planInput, type, together, partner, summary, params.shuffle, params.minutes]);
 
   if (!session || !summary) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
 

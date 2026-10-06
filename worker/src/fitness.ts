@@ -34,14 +34,42 @@ const stepOf = (n: number) => STEPS[Math.min(STEPS.length, Math.max(1, n)) - 1];
 /** Hit your step on this many of the last seven days and the app offers the next one. */
 const STEP_UP_DAYS = 5;
 
-/** The pet grows with every day either of you moves. */
+/** The dog grows with every day either of you moves. Each stage adds a look and a new trick. */
 const STAGES = [
-  { at: 0, name: 'Baby' },
-  { at: 10, name: 'Little' },
-  { at: 30, name: 'Grown' },
-  { at: 75, name: 'Scarf' },
-  { at: 150, name: 'Crown' },
+  { at: 0, name: 'Newborn', look: 'Tiny and sleepy', trick: null },
+  { at: 5, name: 'Puppy', look: 'Bigger paws', trick: 'sit' },
+  { at: 15, name: 'Bandana Pup', look: 'A red bandana', trick: 'paw' },
+  { at: 30, name: 'Collar Pup', look: 'Collar with a heart tag', trick: 'spin' },
+  { at: 50, name: 'Playful Pup', look: 'Fluffier tail and ears', trick: 'roll' },
+  { at: 80, name: 'Grown Up', look: 'Emerald scarf', trick: 'bow' },
+  { at: 120, name: 'Good Dog', look: 'Gold medal', trick: 'beg' },
+  { at: 180, name: 'Champion', look: 'Hero cape', trick: 'zoomies' },
+  { at: 270, name: 'Legend', look: 'Golden crown and sparkle', trick: 'dance' },
 ];
+
+/** Things to wear, bought with treats. */
+const WARDROBE: Record<string, { name: string; cost: number }> = {
+  party: { name: 'Party hat', cost: 8 },
+  bow: { name: 'Bow', cost: 10 },
+  glasses: { name: 'Sunglasses', cost: 12 },
+  beanie: { name: 'Beanie', cost: 15 },
+  flowers: { name: 'Flower crown', cost: 20 },
+  cap: { name: 'Cap', cost: 15 },
+  bowtie: { name: 'Bow tie', cost: 25 },
+  veil: { name: 'Wedding veil', cost: 40 },
+};
+const TREATS_PER_SESSION = 6;
+/** The play meter drops two points an hour, so a full meter lasts about two days. */
+const FUN_DECAY_PER_HOUR = 2;
+
+type PetRow = { household_id: string; treats_spent: number; fun: number; fun_at: number; owned: string; wearing: string | null; best_fetch: number; best_catch: number; best_find: number };
+async function petRow(env: Env, householdId: string): Promise<PetRow> {
+  const r = await env.DB.prepare('SELECT * FROM fit_pet WHERE household_id = ?').bind(householdId).first<PetRow>();
+  if (r) return r;
+  await env.DB.prepare('INSERT OR IGNORE INTO fit_pet (household_id, fun_at, updated_at) VALUES (?, ?, ?)').bind(householdId, now(), now()).run();
+  return (await env.DB.prepare('SELECT * FROM fit_pet WHERE household_id = ?').bind(householdId).first<PetRow>())!;
+}
+const funNow = (r: PetRow) => Math.max(0, Math.round(r.fun - ((now() - r.fun_at) / 3600000) * FUN_DECAY_PER_HOUR));
 
 const BADGES: { id: string; title: string; desc: string; icon: string }[] = [
   { id: 'first', title: 'First steps', desc: 'Moved for ten minutes', icon: 'shoe-print' },
@@ -104,14 +132,17 @@ async function summary(env: Env, u: User) {
   const s = await getSettings(env, u.household_id);
   // Two years of daily totals covers streaks and charts without loading every workout ever logged.
   const since = addDays(today, -730) > s.start_date ? addDays(today, -730) : s.start_date;
-  const [members, profiles, daysQ, recentQ, kindsQ] = await env.DB.batch([
+  const pr = await petRow(env, u.household_id);
+  const [members, profiles, daysQ, recentQ, kindsQ, treatsQ] = await env.DB.batch([
     env.DB.prepare('SELECT id, name, color FROM users WHERE household_id = ? ORDER BY created_at').bind(u.household_id),
     env.DB.prepare('SELECT p.* FROM fit_profiles p JOIN users u ON u.id = p.user_id WHERE u.household_id = ?').bind(u.household_id),
     env.DB.prepare('SELECT user_id, date, SUM(minutes) AS m FROM fit_workouts WHERE household_id = ? AND date >= ? GROUP BY user_id, date').bind(u.household_id, since),
     env.DB.prepare('SELECT * FROM fit_workouts WHERE household_id = ? ORDER BY date DESC, created_at DESC LIMIT 12').bind(u.household_id),
     env.DB.prepare(`SELECT user_id, SUM(together) AS together, SUM(CASE WHEN kind IN ('home', 'partner', 'stairs', 'jog') THEN 1 ELSE 0 END) AS workouts
       FROM fit_workouts WHERE household_id = ? GROUP BY user_id`).bind(u.household_id),
+    env.DB.prepare(`SELECT COALESCE(SUM(MIN(minutes / 10, ${TREATS_PER_SESSION})), 0) AS t FROM fit_workouts WHERE household_id = ?`).bind(u.household_id),
   ]);
+  const treatsEarned = (treatsQ.results[0] as { t: number }).t;
   const people = members.results as { id: string; name: string; color: string }[];
   const prof = new Map((profiles.results as Profile[]).map((p) => [p.user_id, p]));
   const kinds = new Map((kindsQ.results as { user_id: string; together: number; workouts: number }[]).map((k) => [k.user_id, k]));
@@ -211,6 +242,15 @@ async function summary(env: Env, u: User) {
       name: s.pet_name, kind: s.pet_kind, color: s.pet_color, mood,
       fed: Object.fromEntries(people.map((p) => [p.id, minutesOn(p.id, today) >= FLOOR_MIN])),
       stage, stage_name: STAGES[stage].name, growth, next_stage_at: nextStage?.at ?? null,
+      stages: STAGES.map((st, i) => ({ ...st, reached: i <= stage })),
+      tricks: STAGES.slice(1, stage + 1).map((st) => st.trick).filter(Boolean),
+      treats: Math.max(0, treatsEarned - pr.treats_spent),
+      treats_earned: treatsEarned,
+      fun: funNow(pr),
+      owned: JSON.parse(pr.owned || '[]') as string[],
+      wearing: pr.wearing,
+      wardrobe: Object.entries(WARDROBE).map(([id, w]) => ({ id, ...w })),
+      best: { fetch: pr.best_fetch, catch: pr.best_catch, find: pr.best_find },
     },
     badges: BADGES.map((b) => ({ ...b, earned: earned.has(b.id) })),
     recent: recentQ.results as Workout[],
@@ -278,6 +318,57 @@ export function registerFitness(app: App) {
       added = res.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
     }
     return c.json({ added, summary: await summary(c.env, u) });
+  });
+
+  // Playing with the dog: pats, treats, tricks and minigames lift the play meter.
+  app.post('/api/fit/pet/play', async (c) => {
+    const u = c.get('user');
+    const b = await c.req.json<{ kind?: string; score?: number }>();
+    const r = await petRow(c.env, u.household_id);
+    const score = Math.max(0, Math.min(100, Math.round(Number(b.score) || 0)));
+    const gain: Record<string, number> = { pat: 2, trick: 4, treat: 12, fetch: 6 + score * 3, catch: 6 + Math.round(score / 2), find: 6 + score * 3 };
+    if (!(b.kind && b.kind in gain)) return bad('Unknown kind of play.');
+    let spent = r.treats_spent;
+    if (b.kind === 'treat') {
+      const earned = ((await c.env.DB.prepare(`SELECT COALESCE(SUM(MIN(minutes / 10, ${TREATS_PER_SESSION})), 0) AS t FROM fit_workouts WHERE household_id = ?`)
+        .bind(u.household_id).first<{ t: number }>())?.t ?? 0);
+      if (earned - spent < 1) return bad('No treats left. Every ten minutes of moving earns one.');
+      spent += 1;
+    }
+    const fun = Math.min(100, funNow(r) + Math.min(30, gain[b.kind]));
+    const best = { fetch: r.best_fetch, catch: r.best_catch, find: r.best_find } as Record<string, number>;
+    if (b.kind in best) best[b.kind] = Math.max(best[b.kind], score);
+    await c.env.DB.prepare('UPDATE fit_pet SET fun = ?, fun_at = ?, treats_spent = ?, best_fetch = ?, best_catch = ?, best_find = ?, updated_at = ? WHERE household_id = ?')
+      .bind(fun, now(), spent, best.fetch, best.catch, best.find, now(), u.household_id).run();
+    return c.json(await summary(c.env, u));
+  });
+
+  app.post('/api/fit/pet/buy', async (c) => {
+    const u = c.get('user');
+    const item = (await c.req.json<{ item?: string }>()).item ?? '';
+    const w = WARDROBE[item];
+    if (!w) return bad('Unknown item.');
+    const r = await petRow(c.env, u.household_id);
+    const owned = JSON.parse(r.owned || '[]') as string[];
+    if (!owned.includes(item)) {
+      const earned = ((await c.env.DB.prepare(`SELECT COALESCE(SUM(MIN(minutes / 10, ${TREATS_PER_SESSION})), 0) AS t FROM fit_workouts WHERE household_id = ?`)
+        .bind(u.household_id).first<{ t: number }>())?.t ?? 0);
+      if (earned - r.treats_spent < w.cost) return bad(`That needs ${w.cost} treats. Every ten minutes of moving earns one.`);
+      owned.push(item);
+      await c.env.DB.prepare('UPDATE fit_pet SET owned = ?, treats_spent = treats_spent + ?, wearing = ?, updated_at = ? WHERE household_id = ?')
+        .bind(JSON.stringify(owned), w.cost, item, now(), u.household_id).run();
+    }
+    return c.json(await summary(c.env, u));
+  });
+
+  app.post('/api/fit/pet/wear', async (c) => {
+    const u = c.get('user');
+    const item = (await c.req.json<{ item?: string | null }>()).item ?? null;
+    const r = await petRow(c.env, u.household_id);
+    const owned = JSON.parse(r.owned || '[]') as string[];
+    if (item && !owned.includes(item)) return bad('Buy it first.');
+    await c.env.DB.prepare('UPDATE fit_pet SET wearing = ?, updated_at = ? WHERE household_id = ?').bind(item, now(), u.household_id).run();
+    return c.json(await summary(c.env, u));
   });
 
   // Deleting one row of a shared session removes both people's rows.

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, Switch, Text, View } from 'react-native';
 import { C, S, tint } from '../lib/theme';
-import { api, changes, type Summary } from '../lib/api';
+import { api, changes, type Summary, type Workout } from '../lib/api';
 import { today as todayIso, friendly } from '../lib/dates';
 import { useStore } from '../lib/store';
-import { Chips, Field, Icon, Sheet, styles as ui, tap, DateField, type IconName } from './ui';
+import { Button, Chips, Field, Icon, Sheet, styles as ui, tap, DateField, type IconName } from './ui';
 
 export const accentOf = (c: 'accent' | 'warm' | 'gold' | 'green') => ({ accent: C.accent, warm: C.warm, gold: C.gold, green: C.green })[c];
 
@@ -158,5 +158,58 @@ export function WeeksChart({ summary, height = 110 }: { summary: Summary; height
         <Text style={{ color: C.faint, fontSize: 11 }}>This week</Text>
       </View>
     </View>
+  );
+}
+
+/** Details of one logged session, with Delete. Shared sessions delete for both of you. */
+export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; onClose: () => void }) {
+  const { refresh, name } = useStore();
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    if (!workout) return;
+    setBusy(true);
+    try {
+      await api(`/api/fit/workouts/${workout.id}`, { method: 'DELETE' });
+      changes.emit('workouts');
+      await refresh();
+      onClose();
+    } catch (e) { Alert.alert('That did not delete', (e as Error).message); } finally { setBusy(false); }
+  };
+  const confirm = () => Alert.alert('Delete this session?', workout?.together ? 'It was logged for both of you, so it goes from both.' : 'This cannot be undone.', [
+    { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: remove },
+  ]);
+  return (
+    <Sheet visible={!!workout} title={workout?.title ?? ''} onClose={onClose}>
+      {workout ? (
+        <View style={{ gap: S.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
+            <Icon name={kindIcon(workout.kind)} size={28} color={C.accent} />
+            <Text style={[ui.h2, ui.num]}>{workout.minutes} min</Text>
+          </View>
+          <Text style={{ color: C.sub }}>{name(workout.user_id)} · {friendly(workout.date)}{workout.together ? ' · together' : ''}{(workout as Workout & { source?: string | null }).source ? ' · from Samsung Health' : ''}</Text>
+          <Text style={{ color: C.sub }}>Effort: {['', 'Easy', 'Solid', 'Tough'][workout.effort] ?? 'Solid'}</Text>
+          <Button title="Delete session" kind="danger" icon="trash-can-outline" onPress={confirm} busy={busy} />
+        </View>
+      ) : null}
+    </Sheet>
+  );
+}
+
+/** A tappable row for a logged session. */
+export function WorkoutRow({ w, first, onPress }: { w: Workout; first?: boolean; onPress: () => void }) {
+  const { name, color } = useStore();
+  return (
+    <Pressable onPress={() => { tap(); onPress(); }} accessibilityRole="button" accessibilityHint="Opens details, where you can delete it"
+      style={({ pressed }) => [ui.row, !first && { borderTopWidth: 1, borderTopColor: C.line }, pressed && { opacity: 0.7 }]}>
+      <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: tint(color(w.user_id), 0.16), alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={kindIcon(w.kind)} size={18} color={color(w.user_id)} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={ui.rowTitle} numberOfLines={1}>{w.title}</Text>
+        <Text style={ui.rowSub}>{name(w.user_id)} · {friendly(w.date)}{w.together ? ' · together' : ''}</Text>
+      </View>
+      <Text style={[{ color: C.ink, fontWeight: '700' }, ui.num]}>{w.minutes} min</Text>
+      <Icon name="chevron-right" size={18} color={C.faint} />
+    </Pressable>
   );
 }

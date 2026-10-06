@@ -26,8 +26,9 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: C.bg },
       }}
     >
-      <Tabs.Screen name="index" options={tab('Home', 'paw-outline', 'paw')} />
-      <Tabs.Screen name="moves" options={tab('Moves', 'walk', 'walk')} />
+      <Tabs.Screen name="index" options={tab('Home', 'home-outline', 'home')} />
+      <Tabs.Screen name="workouts" options={tab('Workouts', 'dumbbell', 'dumbbell')} />
+      <Tabs.Screen name="dog" options={tab('Dog', 'paw-outline', 'paw')} />
       <Tabs.Screen name="progress" options={tab('Progress', 'chart-line', 'chart-line')} />
     </Tabs>
   );

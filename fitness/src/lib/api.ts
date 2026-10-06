@@ -78,6 +78,12 @@ export type Mood = 'new' | 'thrilled' | 'happy' | 'okay' | 'sad';
 export type Pet = {
   name: string | null; kind: PetKind; color: string; mood: Mood; fed: Record<string, boolean>;
   stage: number; stage_name: string; growth: number; next_stage_at: number | null;
+  stages: { at: number; name: string; look: string; trick: string | null; reached: boolean }[];
+  tricks: string[];
+  treats: number; treats_earned: number; fun: number;
+  owned: string[]; wearing: string | null;
+  wardrobe: { id: string; name: string; cost: number }[];
+  best: { fetch: number; catch: number; find: number };
 };
 export type Badge = { id: string; title: string; desc: string; icon: string; earned: boolean };
 export type Summary = {

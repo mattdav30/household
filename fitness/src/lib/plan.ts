@@ -3,7 +3,8 @@
 import { EXERCISES, byId, type Area, type Equip, type Exercise } from './exercises';
 import type { Weather } from './weather';
 
-export type SessionType = 'strength' | 'hiit' | 'tabata' | 'stretch' | 'partner' | 'walk' | 'stairs' | 'dance' | 'quick';
+export type SessionType = 'strength' | 'hiit' | 'tabata' | 'stretch' | 'partner' | 'walk' | 'stairs' | 'dance' | 'quick'
+  | 'cardio' | 'legs' | 'upper' | 'core' | 'chair' | 'yoga' | 'rainy';
 export type Step = {
   name: string;
   seconds: number;
@@ -32,18 +33,27 @@ export type PlanInput = {
   quiet: boolean; // no jumping
   weather?: Weather | null;
   shuffle?: number;
+  /** Chosen length in minutes for home sessions. Defaults to about your daily step. */
+  minutes?: number;
 };
 
 export const TYPE_INFO: Record<SessionType, { label: string; short: string; icon: string; color: 'accent' | 'warm' | 'gold' | 'green'; blurb: string; unlock: number }> = {
-  strength: { short: 'Strength', label: 'Strength circuit', icon: 'arm-flex', color: 'accent', blurb: 'Full body circuit to build strength and shape.', unlock: 5 },
-  hiit: { short: 'Cardio', label: 'Cardio and core', icon: 'heart-pulse', color: 'warm', blurb: 'Intervals that raise your heart rate, finished with core.', unlock: 6 },
-  tabata: { short: 'Tabata', label: 'Tabata blast', icon: 'lightning-bolt', color: 'gold', blurb: '20 seconds hard, 10 seconds rest. Short and sharp.', unlock: 7 },
+  strength: { short: 'Strength', label: 'Strength circuit', icon: 'arm-flex', color: 'accent', blurb: 'Full body circuit to build strength and shape.', unlock: 1 },
+  hiit: { short: 'Cardio', label: 'Cardio and core', icon: 'heart-pulse', color: 'warm', blurb: 'Intervals that raise your heart rate, finished with core.', unlock: 1 },
+  tabata: { short: 'Tabata', label: 'Tabata blast', icon: 'lightning-bolt', color: 'gold', blurb: '20 seconds hard, 10 seconds rest. Short and sharp.', unlock: 1 },
   stretch: { short: 'Stretch', label: 'Stretch and recover', icon: 'yoga', color: 'green', blurb: 'Easy mobility for rest days. Counts towards your streak.', unlock: 1 },
-  partner: { short: 'Partner', label: 'Partner workout', icon: 'account-heart', color: 'warm', blurb: 'Built for two. High fives included.', unlock: 5 },
+  partner: { short: 'Partner', label: 'Partner workout', icon: 'account-heart', color: 'warm', blurb: 'Built for two. High fives included.', unlock: 1 },
   walk: { short: 'Walk', label: 'Walk', icon: 'walk', color: 'green', blurb: 'A timed walk at your step. Faster bursts come in as you climb.', unlock: 1 },
-  stairs: { short: 'Stairs', label: 'Stair session', icon: 'stairs', color: 'gold', blurb: 'Climb, recover, repeat. Brisbane has great stairs.', unlock: 6 },
+  stairs: { short: 'Stairs', label: 'Stair session', icon: 'stairs', color: 'gold', blurb: 'Climb, recover, repeat. Brisbane has great stairs.', unlock: 1 },
   dance: { short: 'Dance', label: 'Dance session', icon: 'music-note', color: 'accent', blurb: 'Practise your first dance, or put on a playlist and move. Every minute counts.', unlock: 1 },
-  quick: { short: 'Ten min', label: 'Ten minute home workout', icon: 'timer-sand', color: 'accent', blurb: 'Gentle moves in the lounge room. Ten minutes, start to finish.', unlock: 4 },
+  cardio: { short: 'Cardio', label: 'Lounge room cardio', icon: 'human-handsup', color: 'warm', blurb: 'No jumping, no gear. Gets your heart going in the lounge room.', unlock: 1 },
+  legs: { short: 'Legs', label: 'Legs and glutes', icon: 'run-fast', color: 'accent', blurb: 'Squats, lunges and bridges for strong legs and glutes.', unlock: 1 },
+  upper: { short: 'Upper', label: 'Arms and back', icon: 'arm-flex', color: 'gold', blurb: 'Push ups, rows and arm toning. Water bottles make good weights.', unlock: 1 },
+  core: { short: 'Core', label: 'Core and abs', icon: 'karate', color: 'green', blurb: 'Planks, dead bugs and crunches on the mat.', unlock: 1 },
+  chair: { short: 'Chair', label: 'Chair workout', icon: 'seat', color: 'accent', blurb: 'All done with a chair. The gentlest way to start.', unlock: 1 },
+  yoga: { short: 'Yoga', label: 'Yoga flow', icon: 'yoga', color: 'green', blurb: 'Slow flowing poses. Calm, stretchy and good for sleep.', unlock: 1 },
+  rainy: { short: 'Rainy', label: 'Rainy day mix', icon: 'weather-rainy', color: 'warm', blurb: 'A bit of everything, all indoors. Swap for a walk on wet days.', unlock: 1 },
+  quick: { short: 'Ten min', label: 'Ten minute home workout', icon: 'timer-sand', color: 'accent', blurb: 'Gentle moves in the lounge room. Ten minutes, start to finish.', unlock: 1 },
 };
 
 /** Free outdoor spots around Brisbane. */
@@ -82,14 +92,18 @@ export function difficulty(step: number) {
 /** Which harder moves are allowed: steps 1 to 5 keep to the gentle ones. */
 const moveLevel = (step: number) => (step <= 5 ? 1 : step <= 7 ? 2 : 3);
 
-function pool(p: PlanInput, area: Area | Area[], opts: { partner?: boolean } = {}) {
+function pool(p: PlanInput, area: Area | Area[], opts: { partner?: boolean; seated?: boolean } = {}) {
   const areas = Array.isArray(area) ? area : [area];
-  const have = new Set<Equip>(['none', ...p.equipment]);
+  const have = new Set<Equip>(['none', 'chair', ...p.equipment]);
   return EXERCISES.filter((e) => areas.includes(e.area)
+    && !e.yoga
     && have.has(e.equip)
     && (e.level ?? 1) <= moveLevel(p.step)
     && !(p.quiet && e.impact === 'high')
-    && !!e.partner === !!opts.partner);
+    && !!e.partner === !!opts.partner
+    && (opts.seated ? !!e.seated : !e.seated)
+    // Jumping only once you reach step five, so early sessions stay gentle.
+    && !(e.impact === 'high' && p.step < 5));
 }
 
 function warmUp(): Step[] {
@@ -121,12 +135,64 @@ function circuit(p: PlanInput, r: () => number, moves: Exercise[], rounds: numbe
   return steps;
 }
 
+/** Fills a target length with a circuit of these moves, sized to your step. */
+function timed(p: PlanInput, r: () => number, moves: Exercise[], warm: Step[], coolN: number): { steps: Step[]; note: string } {
+  const d = difficulty(p.step);
+  const target = (p.minutes ?? Math.max(10, Math.min(30, p.target))) * 60;
+  const on = 30 + Math.round(d * 10);
+  const off = Math.max(15, 30 - Math.round(d * 8));
+  const cool = coolDown(r, coolN);
+  const fixed = [...warm, ...cool].reduce((t, s) => t + s.seconds, 0);
+  const block = moves.length * (on + off) - off + 45;
+  const rounds = Math.max(1, Math.min(6, Math.round((target - fixed) / block)));
+  return { steps: [...warm, ...circuit(p, r, moves, rounds, on, off, 45), ...cool], note: `${rounds} ${rounds === 1 ? 'round' : 'rounds'} of ${moves.length} moves, ${on}s on and ${off}s off.` };
+}
+const unique = (xs: Exercise[]) => xs.filter((e, i, a) => e && a.findIndex((x) => x.id === e.id) === i);
+
 export function buildSession(type: SessionType, p: PlanInput): Session {
   const r = rng(`${p.date}:${type}:${p.shuffle ?? 0}`);
   const d = difficulty(p.step);
   const info = TYPE_INFO[type];
   const base = { type, title: info.label, blurb: info.blurb, outdoor: false, partner: false, logKind: 'home' };
   const pick = (area: Area, n = 1, partner = false) => pickN(pool(p, area, { partner }), n, r);
+
+  if (type === 'cardio' || type === 'legs' || type === 'upper' || type === 'core' || type === 'rainy') {
+    const soft = (xs: Exercise[]) => xs.filter((e) => e.impact !== 'high' || p.step >= 6);
+    const sets: Record<string, Exercise[]> = {
+      cardio: pickN(soft(pool(p, 'cardio')), 6, r),
+      legs: unique([...pickN(pool(p, 'legs'), 5, r), ...pick('core')]),
+      upper: unique([...pickN(pool(p, 'push'), 3, r), ...pickN(pool(p, 'pull'), 3, r)]),
+      core: pickN(pool(p, 'core'), 6, r),
+      rainy: unique([...pickN(soft(pool(p, 'cardio')), 2, r), ...pick('legs'), ...pick('push'), ...pick('pull'), ...pick('core')]),
+    };
+    const t = timed(p, r, sets[type], warmUp(), 3);
+    return { ...base, steps: t.steps, minutes: minutesOf(t.steps), note: t.note };
+  }
+
+  if (type === 'chair') {
+    const moves = unique([...pickN(pool(p, ['cardio', 'core'], { seated: true }), 3, r), ...pickN(pool(p, ['legs', 'push', 'pull'], { seated: true }), 3, r),
+      ...pickN(EXERCISES.filter((e) => e.id.startsWith('chair-')), 1, r)]);
+    const warm: Step[] = ['seat-march', 'arm-circles', 'seat-twist'].map((id) => ({ name: byId(id)!.name, seconds: 40, kind: 'warm' as const, exId: id }));
+    const t = timed(p, r, moves, warm, 2);
+    return { ...base, steps: t.steps, minutes: minutesOf(t.steps), note: `${t.note} A sturdy chair without wheels is best.` };
+  }
+
+  if (type === 'yoga') {
+    const flow = EXERCISES.filter((e) => e.yoga || ['cat-cow', 'childs-pose', 'worlds-greatest', 'figure-four', 'hip-flexor'].includes(e.id));
+    const target = (p.minutes ?? Math.max(10, Math.min(30, p.target))) * 60;
+    const hold = 40 + Math.round(d * 10);
+    const steps: Step[] = [{ name: 'Mountain pose with breath', seconds: 60, kind: 'warm', exId: 'mountain', cue: 'Slow breaths in through the nose.' }];
+    const order = pickN(flow.filter((e) => e.id !== 'mountain'), flow.length, r);
+    let used = 60;
+    for (const e of [...order, ...order]) {
+      const secs = e.sides ? hold * 2 : hold;
+      if (used + secs > target - 90) break;
+      steps.push({ name: e.name, seconds: secs, kind: 'move', exId: e.id, cue: e.sides ? 'Switch sides halfway' : 'Breathe slowly' });
+      used += secs;
+    }
+    steps.push({ name: "Child's pose rest", seconds: 90, kind: 'cool', exId: 'childs-pose', cue: 'Let everything go soft.' });
+    return { ...base, logKind: 'stretch', steps, minutes: minutesOf(steps) };
+  }
 
   if (type === 'strength') {
     const moves = [...pick('legs', 2), ...pick('push'), ...pick('pull'), ...pick('core'), ...pick('legs')]
@@ -244,16 +310,16 @@ export function buildSession(type: SessionType, p: PlanInput): Session {
   return { ...base, steps, minutes: minutesOf(steps), note: 'Ten minutes is a win. Keep going if you feel good.' };
 }
 
-// What today looks like at each step. Walks first, home workouts join from step four.
+// What today looks like at each step. Mostly walks early on, with a gentle home session or yoga a couple of days a week.
 const WEEK_BY_STEP: SessionType[][] = [
-  ['walk', 'walk', 'walk', 'walk', 'walk', 'walk', 'walk'],
-  ['walk', 'walk', 'walk', 'walk', 'walk', 'walk', 'walk'],
-  ['walk', 'walk', 'walk', 'stretch', 'walk', 'walk', 'walk'],
-  ['walk', 'walk', 'quick', 'walk', 'walk', 'walk', 'stretch'],
-  ['strength', 'walk', 'walk', 'quick', 'walk', 'walk', 'stretch'],
-  ['strength', 'walk', 'hiit', 'stretch', 'partner', 'stairs', 'walk'],
-  ['strength', 'walk', 'hiit', 'stretch', 'partner', 'stairs', 'walk'],
-  ['strength', 'walk', 'tabata', 'stretch', 'partner', 'stairs', 'hiit'],
+  ['walk', 'walk', 'cardio', 'walk', 'walk', 'yoga', 'walk'],
+  ['walk', 'chair', 'walk', 'cardio', 'walk', 'yoga', 'walk'],
+  ['walk', 'legs', 'walk', 'cardio', 'walk', 'yoga', 'walk'],
+  ['walk', 'rainy', 'walk', 'core', 'walk', 'yoga', 'walk'],
+  ['strength', 'walk', 'cardio', 'yoga', 'walk', 'legs', 'walk'],
+  ['strength', 'walk', 'hiit', 'yoga', 'partner', 'stairs', 'walk'],
+  ['strength', 'walk', 'hiit', 'stretch', 'partner', 'stairs', 'upper'],
+  ['strength', 'walk', 'tabata', 'yoga', 'partner', 'stairs', 'hiit'],
 ];
 
 export function dayType(date: string, step: number): SessionType {
@@ -269,7 +335,7 @@ export function todaysSession(p: PlanInput): { session: Session; swapped: string
   let type = planned;
   let swapped: string | null = null;
   if (w && (planned === 'walk' || planned === 'stairs') && (w.rainChance >= 60 || w.maxTemp >= 34)) {
-    type = p.step >= 4 ? 'quick' : 'dance';
+    type = p.step >= 3 ? 'rainy' : 'cardio';
     swapped = w.rainChance >= 60 ? `Rain is likely today (${w.rainChance}%), so here is an indoor option.` : `${w.maxTemp}°C forecast, so here is an indoor option.`;
   }
   const session = buildSession(type, p);
@@ -279,4 +345,15 @@ export function todaysSession(p: PlanInput): { session: Session; swapped: string
   return { session, swapped };
 }
 
-export const ALL_TYPES: SessionType[] = ['walk', 'stretch', 'dance', 'quick', 'strength', 'partner', 'hiit', 'stairs', 'tabata'];
+export const ALL_TYPES: SessionType[] = ['walk', 'cardio', 'chair', 'legs', 'upper', 'core', 'rainy', 'strength', 'yoga', 'stretch', 'partner', 'dance', 'stairs', 'hiit', 'tabata', 'quick'];
+
+/** How the Workouts screen groups sessions. */
+export const GROUPS: { title: string; sub: string; types: SessionType[] }[] = [
+  { title: 'Home workouts', sub: 'No gear, perfect for bad weather', types: ['cardio', 'chair', 'rainy', 'legs', 'upper', 'core', 'strength'] },
+  { title: 'Outside', sub: 'Walks and stairs', types: ['walk', 'stairs'] },
+  { title: 'Calm and stretchy', sub: 'Yoga and recovery', types: ['yoga', 'stretch'] },
+  { title: 'Together', sub: 'Built for two', types: ['partner', 'dance'] },
+  { title: 'Turn it up', sub: 'Harder intervals for later steps', types: ['hiit', 'tabata'] },
+];
+/** Sessions that take a chosen length. */
+export const HAS_LENGTH: SessionType[] = ['cardio', 'chair', 'rainy', 'legs', 'upper', 'core', 'yoga'];

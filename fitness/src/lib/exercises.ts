@@ -16,6 +16,8 @@ export type Exercise = {
   level?: 1 | 2 | 3; // lowest level that gets this move
   sides?: boolean; // done on each side, so the timer splits the block in half
   partner?: boolean;
+  seated?: boolean; // can be done sitting in a chair
+  yoga?: boolean;
 };
 
 export const EQUIPMENT: { value: Equip; label: string; note: string }[] = [
@@ -125,6 +127,48 @@ export const EXERCISES: Exercise[] = [
   { id: 'chest-opener', name: 'Doorway chest stretch', area: 'mobility', equip: 'none', how: 'Forearms on a door frame, step through gently until your chest opens up.' },
   { id: 'deep-squat', name: 'Deep squat hold', area: 'mobility', equip: 'none', how: 'Sink into a low squat, elbows pressing knees out. Hold a door frame if needed.' },
   { id: 'neck-shoulders', name: 'Neck and shoulder rolls', area: 'mobility', equip: 'none', how: 'Slow shoulder rolls back, then tilt each ear towards the shoulder.' },
+
+  // Seated and chair moves, gentle enough for day one.
+  { id: 'seat-march', name: 'Seated march', area: 'cardio', equip: 'chair', seated: true, how: 'Sit tall near the front of the chair. Lift one knee then the other, pumping your arms.' },
+  { id: 'seat-punch', name: 'Seated punches', area: 'cardio', equip: 'chair', seated: true, how: 'Sit tall, core tight. Punch forward, alternating arms, as fast as feels good.' },
+  { id: 'seat-jacks', name: 'Seated jacks', area: 'cardio', equip: 'chair', seated: true, how: 'Sitting, tap your feet out wide as your arms go up, then back in.' },
+  { id: 'seat-knee', name: 'Seated knee tucks', area: 'core', equip: 'chair', seated: true, how: 'Hold the sides of the seat and lean back a little. Draw both knees towards your chest, lower slowly.' },
+  { id: 'seat-twist', name: 'Seated twists', area: 'core', equip: 'chair', seated: true, how: 'Sit tall, hands at your chest. Turn your shoulders left and right, hips stay still.' },
+  { id: 'seat-legext', name: 'Seated leg lifts', area: 'legs', equip: 'chair', seated: true, sides: true, how: 'Straighten one leg until it is level, squeeze the thigh, lower slowly.' },
+  { id: 'sit-stand', name: 'Sit to stand', area: 'legs', equip: 'chair', seated: true, how: 'From sitting, stand up without using your hands, then sit back down slowly.' },
+  { id: 'seat-overhead', name: 'Overhead reach', area: 'push', equip: 'chair', seated: true, how: 'Sit tall and press both hands up to the ceiling, then pull elbows down to your sides.' },
+  { id: 'seat-row', name: 'Seated rows', area: 'pull', equip: 'chair', seated: true, how: 'Arms out in front, pull your elbows back and squeeze your shoulder blades together.' },
+  { id: 'chair-calf', name: 'Calf raises at the chair', area: 'legs', equip: 'chair', how: 'Stand behind the chair holding the back. Rise onto your toes, lower slowly.' },
+  { id: 'chair-kickback', name: 'Glute kickbacks', area: 'legs', equip: 'chair', sides: true, how: 'Hold the back of the chair. Kick one leg straight back, squeezing your glute.' },
+  { id: 'chair-side-leg', name: 'Side leg raises', area: 'legs', equip: 'chair', sides: true, how: 'Hold the chair. Lift one leg out to the side, toes forward, lower slowly.' },
+
+  // Low impact lounge room cardio.
+  { id: 'step-touch', name: 'Step touch', area: 'cardio', equip: 'none', how: 'Step to the side and bring the other foot in to tap. Add arm swings to lift your heart rate.' },
+  { id: 'grapevine', name: 'Grapevine', area: 'cardio', equip: 'none', how: 'Step right, cross behind, step right, tap. Then go back the other way.' },
+  { id: 'knee-punch', name: 'Knee lift and punch', area: 'cardio', equip: 'none', how: 'Punch across your body as the opposite knee lifts. Alternate sides with a bounce.' },
+  { id: 'boxer-shuffle', name: 'Boxer shuffle', area: 'cardio', equip: 'none', how: 'Light bounce from foot to foot, hands up guarding your face.' },
+  { id: 'side-reach', name: 'Side to side reach', area: 'cardio', equip: 'none', how: 'Step wide and reach your arm up and over, then switch sides with a rhythm.' },
+  { id: 'heel-dig', name: 'Heel digs', area: 'cardio', equip: 'none', how: 'Tap one heel forward then the other, arms curling up as you go.' },
+  { id: 'oblique-crunch', name: 'Standing side crunch', area: 'core', equip: 'none', how: 'Hands behind your head. Lift one knee out to the side and crunch your elbow down to meet it.' },
+  { id: 'wall-angels', name: 'Wall angels', area: 'pull', equip: 'none', how: 'Back against a wall, arms in a goal post shape. Slide your arms up and down, keeping them on the wall.' },
+  { id: 'arm-pulses', name: 'Arm pulses', area: 'push', equip: 'none', how: 'Arms straight out to the sides. Pulse them up a few centimetres, palms down, then palms up.' },
+  { id: 'tricep-kick', name: 'Bottle tricep kickbacks', area: 'push', equip: 'none', how: 'Hold a water bottle in each hand, hinge forward, elbows high. Straighten your arms back, squeeze.' },
+  { id: 'bottle-curl', name: 'Bottle curls', area: 'pull', equip: 'none', how: 'Hold water bottles or tins. Curl them up to your shoulders, lower slowly.' },
+  { id: 'donkey-kick', name: 'Donkey kicks', area: 'legs', equip: 'mat', sides: true, how: 'On hands and knees. Push one foot up to the ceiling with the knee bent, squeeze your glute.' },
+  { id: 'fire-hydrant', name: 'Fire hydrants', area: 'legs', equip: 'mat', sides: true, how: 'On hands and knees. Lift one bent knee out to the side, lower slowly.' },
+  { id: 'clamshell', name: 'Clamshells', area: 'legs', equip: 'mat', sides: true, how: 'Lie on your side, knees bent, feet together. Open the top knee like a clam, lower slowly.' },
+  { id: 'reverse-crunch', name: 'Reverse crunches', area: 'core', equip: 'mat', how: 'On your back, knees bent up. Curl your hips off the floor towards your chest, lower slowly.' },
+  { id: 'toe-touch', name: 'Toe reaches', area: 'core', equip: 'mat', how: 'On your back, legs up. Reach your hands towards your toes, lifting your shoulders.' },
+
+  // Yoga flow poses.
+  { id: 'mountain', name: 'Mountain pose with breath', area: 'mobility', equip: 'none', yoga: true, how: 'Stand tall, arms by your sides. Breathe in as you sweep your arms up, out as they float down.' },
+  { id: 'down-dog', name: 'Downward dog', area: 'mobility', equip: 'mat', yoga: true, how: 'Hands and feet on the floor, hips high in an upside down V. Pedal your heels slowly.' },
+  { id: 'cobra', name: 'Cobra', area: 'mobility', equip: 'mat', yoga: true, how: 'Lie face down, hands under shoulders. Gently lift your chest, elbows soft, hips down.' },
+  { id: 'warrior-two', name: 'Warrior two', area: 'mobility', equip: 'none', yoga: true, sides: true, how: 'Wide stance, front knee bent over the ankle, arms long, gaze over the front hand.' },
+  { id: 'tree', name: 'Tree pose', area: 'mobility', equip: 'none', yoga: true, sides: true, how: 'Stand on one leg, other foot on the inner calf or thigh. Hands to your chest. Hold a wall if needed.' },
+  { id: 'low-lunge', name: 'Low lunge', area: 'mobility', equip: 'mat', yoga: true, sides: true, how: 'Back knee down, front knee over the ankle. Lift your arms and sink your hips gently.' },
+  { id: 'happy-baby', name: 'Happy baby', area: 'mobility', equip: 'mat', yoga: true, how: 'On your back, hold the outsides of your feet, knees towards your armpits. Rock gently.' },
+  { id: 'supine-twist', name: 'Lying twist', area: 'mobility', equip: 'mat', yoga: true, sides: true, how: 'On your back, drop both knees to one side, arms wide, look the other way.' },
 
   // Partner moves
   { id: 'p-plank-five', name: 'Plank high fives', area: 'core', equip: 'mat', partner: true, how: 'Face each other in high plank, heads apart. Take turns high fiving with alternate hands.', easier: 'Knees down.' },

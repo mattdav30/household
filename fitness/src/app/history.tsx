@@ -56,19 +56,21 @@ export default function History() {
           keyExtractor={(w) => w.id}
           onEndReached={loadMore}
           contentContainerStyle={{ paddingHorizontal: S.lg, paddingBottom: insets.bottom + 40 }}
+          ListHeaderComponent={<Text style={{ color: C.faint, fontSize: 12, marginBottom: S.md }}>Tap a session to delete it.</Text>}
           ListEmptyComponent={<Empty icon="run" title="Nothing logged yet" text="Finish a session or tap the plus on Today to log a walk." />}
           renderItem={({ item: w, index }) => {
             const newDay = index === 0 || rows[index - 1].date !== w.date;
             return (
               <View>
                 {newDay ? <Text style={[ui.label, { marginTop: index ? S.lg : 0, marginBottom: S.sm }]}>{friendly(w.date)}</Text> : null}
-                <Pressable onLongPress={() => remove(w)} accessibilityHint="Long press to remove" style={[ui.card, { flexDirection: 'row', alignItems: 'center', gap: S.md, marginBottom: S.sm, paddingVertical: S.md }]}>
+                <Pressable onPress={() => remove(w)} onLongPress={() => remove(w)} accessibilityHint="Opens delete" style={({ pressed }) => [ui.card, pressed && { opacity: 0.75 }, { flexDirection: 'row', alignItems: 'center', gap: S.md, marginBottom: S.sm, paddingVertical: S.md }]}>
                   <IconBadge name={kindIcon(w.kind)} color={color(w.user_id)} size={36} />
                   <View style={{ flex: 1 }}>
                     <Text style={ui.rowTitle} numberOfLines={1}>{w.title}</Text>
                     <Text style={ui.rowSub}>{name(w.user_id)}{w.together ? ' · together' : ''} · {['', 'Easy', 'Solid', 'Tough'][w.effort]}</Text>
                   </View>
                   <Text style={[{ color: C.ink, fontWeight: '700' }, ui.num]}>{w.minutes} min</Text>
+                  <Icon name="trash-can-outline" size={20} color={C.faint} />
                 </Pressable>
               </View>
             );
