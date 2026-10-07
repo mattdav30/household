@@ -14,3 +14,10 @@ binding = "DB"
 database_name = "household"
 database_id = "9eb3523c-d3ee-4ab3-85e8-30cec7b8fa01"
 migrations_dir = "migrations"
+
+# Tandem's over the air updates, built by scripts/build-ota.mjs on every deploy.
+[assets]
+directory = "./ota-dist"
+binding = "ASSETS"
+html_handling = "none"
+not_found_handling = "none"

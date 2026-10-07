@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "deploy": "wrangler d1 migrations apply household --remote && wrangler deploy",
+    "deploy": "node scripts/build-ota.mjs && wrangler d1 migrations apply household --remote && wrangler deploy",
     "dev": "wrangler dev"
   },
   "keywords": [],

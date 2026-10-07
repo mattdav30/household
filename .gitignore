@@ -9,3 +9,6 @@ worker/.wrangler/
 .DS_Store
 fitness/android/
 fitness/ios/
+
+worker/ota-dist/
+worker/.ota-export/

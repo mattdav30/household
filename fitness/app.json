@@ -4,7 +4,7 @@
     "slug": "tandem",
     "owner": "metheni",
     "scheme": "tandem",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -26,7 +26,8 @@
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "versionCode": 3
     },
     "plugins": [
       "expo-router",
@@ -103,10 +104,8 @@
       }
     },
     "updates": {
-      "url": "https://u.expo.dev/0f4a4726-e634-46a7-acd2-83dc688b0027",
-      "requestHeaders": {
-        "expo-channel-name": "production"
-      },
+      "url": "https://household-api.matthew-davenport30.workers.dev/ota/manifest",
+      "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     }

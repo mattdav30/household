@@ -8,7 +8,7 @@ import { holidayEvents } from './holidays';
 import { registerFitness } from './fitness';
 import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, normIngredients, sameThing, type Ingredient } from './food';
 
-type Env = { DB: D1Database; TZ_OFFSET_MIN: string };
+type Env = { DB: D1Database; TZ_OFFSET_MIN: string; ASSETS: Fetcher };
 type User = { id: string; household_id: string; email: string; name: string; color: string; notify_hour?: number | null };
 type Vars = { user: User };
 

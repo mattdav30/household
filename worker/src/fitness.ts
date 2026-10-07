@@ -5,7 +5,7 @@
 import type { Hono } from 'hono';
 import { addDays, localDate, now, uid } from './lib';
 
-type Env = { DB: D1Database; TZ_OFFSET_MIN: string };
+type Env = { DB: D1Database; TZ_OFFSET_MIN: string; ASSETS: Fetcher };
 type User = { id: string; household_id: string; email: string; name: string; color: string };
 type App = Hono<{ Bindings: Env; Variables: { user: User } }>;
 
@@ -346,6 +346,37 @@ async function summary(env: Env, u: User) {
 }
 
 export function registerFitness(app: App) {
+  // Over the air updates for Tandem, following the Expo Updates protocol (version 1).
+  // The phone sends its runtime version; we answer with the newest build of the app's JavaScript
+  // for that runtime, or 204 when it already runs it. Files are static assets next to the worker.
+  app.get('/ota/manifest', async (c) => {
+    const runtime = c.req.header('expo-runtime-version') ?? null;
+    const platform = c.req.header('expo-platform') ?? null;
+    const current = c.req.header('expo-current-update-id') ?? null;
+    const embedded = c.req.header('expo-embedded-update-id') ?? null;
+    const base = { 'expo-protocol-version': '1', 'expo-sfv-version': '0', 'cache-control': 'private, max-age=0' };
+    let result = 'none';
+    let manifest: { id: string; runtimeVersion: string; launchAsset: { url: string }; assets: { url: string }[] } | null = null;
+    try {
+      const res = await c.env.ASSETS.fetch(new URL('/ota/manifest.json', c.req.url));
+      if (res.ok) manifest = await res.json();
+    } catch { /* no build yet */ }
+    if (!manifest) result = 'no build';
+    else if (platform !== 'android') result = `wrong platform ${platform}`;
+    else if (manifest.runtimeVersion !== runtime) result = `runtime ${runtime} vs ${manifest.runtimeVersion}`;
+    else if (current === manifest.id) result = 'up to date';
+    else result = `sent ${manifest.id.slice(0, 8)}`;
+    await c.env.DB.batch([
+      c.env.DB.prepare('INSERT INTO fit_ota_log (at, runtime, platform, current_id, embedded_id, result) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(now(), runtime, platform, current, embedded, result),
+      c.env.DB.prepare('DELETE FROM fit_ota_log WHERE id < (SELECT MAX(id) - 300 FROM fit_ota_log)'),
+    ]).catch(() => undefined);
+    if (!result.startsWith('sent')) return new Response(null, { status: 204, headers: base });
+    const abs = (u: string) => new URL(u, c.req.url).toString();
+    const body = { ...manifest!, launchAsset: { ...manifest!.launchAsset, url: abs(manifest!.launchAsset.url) }, assets: manifest!.assets.map((a) => ({ ...a, url: abs(a.url) })) };
+    return new Response(JSON.stringify(body), { headers: { ...base, 'content-type': 'application/expo+json; charset=utf-8' } });
+  });
+
   app.get('/api/fit/summary', async (c) => c.json(await summary(c.env, c.get('user'))));
 
   // The newest installable build, so the app can offer an update without a trip to expo.dev.
