@@ -15,7 +15,12 @@ database_name = "household"
 database_id = "9eb3523c-d3ee-4ab3-85e8-30cec7b8fa01"
 migrations_dir = "migrations"
 
-# Tandem's over the air updates, built by scripts/build-ota.mjs on every deploy.
+# Tandem's over the air updates. Wrangler runs the build before every deploy, however the deploy is started.
+# Set SKIP_OTA=1 to skip the app bundle for a quick local run.
+[build]
+command = "node scripts/build-ota.mjs"
+watch_dir = "scripts"
+
 [assets]
 directory = "./ota-dist"
 binding = "ASSETS"

@@ -7,7 +7,7 @@
 //   ota-dist/ota/a/<sha>.<ext>   the bundle and every image and font, named by content hash
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +15,22 @@ const CONTENT_TYPES = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
   ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2', json: 'application/json', mp3: 'audio/mpeg', wav: 'audio/wav',
 };
+
+/** Hash of every file the app is built from, skipping installed packages and build output. */
+function sourceHash(dir) {
+  const h = createHash('sha256');
+  const skip = new Set(['node_modules', 'dist', '.expo', 'android', 'ios', '.eas', 'web-build']);
+  const walk = (d, rel) => {
+    for (const e of readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (skip.has(e.name) || e.name.startsWith('.git')) continue;
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p, `${rel}${e.name}/`);
+      else { h.update(`${rel}${e.name}\n`); h.update(readFileSync(p)); }
+    }
+  };
+  walk(dir, '');
+  return h.digest('hex');
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = resolve(here, '../../fitness');
@@ -59,8 +75,9 @@ try {
     return { ...p, contentType: CONTENT_TYPES[a.ext] ?? 'application/octet-stream' };
   });
 
-  // Same code and config always gives the same id, so a deploy that changes only the API sends no update.
-  const idHex = sha(Buffer.from(JSON.stringify([launch.hash, assets.map((a) => a.hash), config]))).toString('hex');
+  // The id comes from the app's source files and config, so a deploy that changes only the API sends no update.
+  // (The compiled bundle differs by a few bytes on every build, so it cannot be the id.)
+  const idHex = sha(Buffer.from(JSON.stringify([sourceHash(app), config]))).toString('hex');
   const id = `${idHex.slice(0, 8)}-${idHex.slice(8, 12)}-4${idHex.slice(13, 16)}-a${idHex.slice(17, 20)}-${idHex.slice(20, 32)}`;
   const manifest = {
     id,
