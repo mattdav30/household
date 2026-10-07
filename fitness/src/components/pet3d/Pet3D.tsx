@@ -10,7 +10,9 @@ import { buildPet, faceFor, type PetRig } from './model';
 import { PetArt } from '../Pet';
 
 export type Trick = 'sit' | 'paw' | 'spin' | 'roll' | 'bow' | 'beg' | 'zoomies' | 'dance';
-export type PetAction = { name: Trick | 'treat' | 'pat' | 'wake'; id: number };
+export type PetAction = { name: Trick | 'treat' | 'pat' | 'wake' | 'eat' | 'shake'; id: number };
+/** How the dog is doing right now: mud on the coat, messes on the floor, sleepy, poorly or napping. */
+export type PetCare = { dirt: number; mess: number; tired: boolean; sick: boolean; napping: boolean };
 export type FetchThrow = { id: number; power: number; perfect: boolean };
 
 type Props = {
@@ -35,6 +37,9 @@ type Props = {
   interactive?: boolean;
   /** Pull the camera back, for fetch. */
   wide?: boolean;
+  care?: PetCare | null;
+  /** Bath foam, 0 to 1. */
+  bubbles?: number;
 };
 
 /** Last 3D problem on this phone, shown in Settings so we can see why the flat drawing appeared. */
@@ -74,7 +79,7 @@ export const TRICK_INFO: Record<Trick, { label: string; seconds: number }> = {
   zoomies: { label: 'Zoomies', seconds: 2.8 },
   dance: { label: 'Dance', seconds: 3.2 },
 };
-const ACTION_SECONDS: Record<string, number> = { ...Object.fromEntries(Object.entries(TRICK_INFO).map(([k, v]) => [k, v.seconds])), treat: 2.4, pat: 1.6, wake: 1 };
+const ACTION_SECONDS: Record<string, number> = { ...Object.fromEntries(Object.entries(TRICK_INFO).map(([k, v]) => [k, v.seconds])), treat: 2.4, pat: 1.6, wake: 1, eat: 3.4, shake: 1.6 };
 
 /**
  * The dog in real 3D. Breathes, blinks, wags, twitches its ears, does tricks, eats treats,
@@ -83,11 +88,11 @@ const ACTION_SECONDS: Record<string, number> = { ...Object.fromEntries(Object.en
  */
 export function Pet3D({
   kind = 'dog', color, mood, stage, wearing = null, size = 220, height, celebrate = 0, action = null, fetchThrow = null,
-  onFetchDone, sleepy = true, onTap, onPat, interactive = true, wide = false,
+  onFetchDone, sleepy = true, onTap, onPat, interactive = true, wide = false, care = null, bubbles = 0,
 }: Props) {
   const [failed, setFailed] = useState(false);
-  const props = useRef({ kind, color, mood, stage, sleepy, wearing, wide });
-  props.current = { kind, color, mood, stage, sleepy, wearing, wide };
+  const props = useRef({ kind, color, mood, stage, sleepy, wearing, wide, care, bubbles });
+  props.current = { kind, color, mood, stage, sleepy, wearing, wide, care, bubbles };
   const events = useRef({
     jump: -10, celebrate: -10, spinVel: 0, spin: 0, wokeAt: -100, now: 0,
     action: null as null | { name: string; at: number },
@@ -254,12 +259,15 @@ export function Pet3D({
 
         const k = `${p.color}|${p.stage}|${p.wearing}`;
         if (k !== rigKey) {
-          if (rig) { scene.remove(rig.root); scene.remove(rig.ball); rig.dispose(); }
+          if (rig) { scene.remove(rig.root); scene.remove(rig.ball); scene.remove(rig.bowl); scene.remove(rig.messes); rig.dispose(); }
           rig = buildPet(p.kind, p.color, p.stage, p.wearing);
           rig.bone.position.set(0, -0.42, 0.9);
           rig.head.add(rig.bone);
+          rig.bowl.position.set(0, 0, 1.2);
           scene.add(rig.root);
           scene.add(rig.ball);
+          scene.add(rig.bowl);
+          scene.add(rig.messes);
           rigKey = k;
         }
         const r = rig!;
@@ -272,11 +280,14 @@ export function Pet3D({
 
         const act = ev.action && t - ev.action.at < (ACTION_SECONDS[ev.action.name] ?? 1.5) ? ev.action : null;
         const at = act ? (t - act.at) / (ACTION_SECONDS[act.name] ?? 1.5) : 0;
-        const asleep = p.sleepy && isNight() && t - ev.wokeAt > 20 && !act;
+        const care = p.care;
+        const asleep = !act && (care?.napping ? t - ev.wokeAt > 2.5 : p.sleepy && isNight() && t - ev.wokeAt > 20);
+        const sick = !!care?.sick;
+        const tired = !!care?.tired && !sick;
         const celebrating = t - ev.celebrate < 2.4;
         const patting = t - ev.patting < 0.4 || act?.name === 'pat';
         const happyNow = celebrating || patting || (act && act.name !== 'wake');
-        const face = faceFor(happyNow ? 'thrilled' : p.mood, asleep);
+        const face = faceFor(happyNow ? 'thrilled' : sick ? 'sad' : p.mood, asleep);
 
         // Reset the pose each frame, then layer idle motion and any action on top.
         r.root.position.set(0, 0, 0);
@@ -293,7 +304,7 @@ export function Pet3D({
         const blinking = t < blinkUntil && (face.eyes === 'open' || face.eyes === 'sad');
         for (const [name, gr] of Object.entries(r.eyes)) {
           gr.visible = name === face.eyes;
-          gr.scale.y = gr.visible && blinking ? 0.12 : 1;
+          gr.scale.y = gr.visible && blinking ? 0.12 : gr.visible && tired && !happyNow && name === 'open' ? 0.55 : 1;
         }
         for (const [name, m] of Object.entries(r.mouths)) m.visible = name === face.mouth;
         r.cheeks.visible = face.cheeks;
@@ -301,7 +312,23 @@ export function Pet3D({
         r.tongue.visible = face.tongue && !asleep;
         r.tongue.scale.y = 1 + Math.sin(t * 9) * 0.12;
 
-        const energy = asleep ? 0.2 : celebrating ? 1.6 : ({ thrilled: 1.3, happy: 1, new: 0.9, okay: 0.6, sad: 0.35 } as Record<Mood, number>)[p.mood];
+        const energy = asleep ? 0.2 : celebrating ? 1.6 : sick ? 0.25 : ({ thrilled: 1.3, happy: 1, new: 0.9, okay: 0.6, sad: 0.35 } as Record<Mood, number>)[p.mood] * (tired ? 0.55 : 1);
+
+        // Care: mud on the coat, foam in the bath, messes on the floor, ice pack when poorly.
+        const dirtCount = Math.round(clamp01(care?.dirt ?? 0) * r.mud.length);
+        r.mud.forEach((m, i) => { m.visible = i < dirtCount; });
+        const foam = Math.round(clamp01(p.bubbles) * r.bubbles.length);
+        r.bubbles.forEach((m, i) => {
+          m.visible = i < foam;
+          if (m.visible) {
+            const b = m.userData.base as THREE.Vector3;
+            m.position.set(b.x, b.y + Math.sin(t * 3 + i) * 0.02, b.z);
+            m.scale.setScalar(1 + Math.sin(t * 4 + i * 1.7) * 0.08);
+          }
+        });
+        r.messes.children.forEach((m, i) => { m.visible = !p.wide && i < (care?.mess ?? 0); });
+        r.icePack.visible = sick;
+        r.bowl.visible = false;
 
         // Breathing and a little bounce.
         const breathe = Math.sin(t * (asleep ? 1.2 : 2.2)) * (asleep ? 0.03 : 0.02);
@@ -431,6 +458,28 @@ export function Pet3D({
               tailWag = 1.2;
               break;
             }
+            case 'eat': {
+              // Bowl appears, head dips in for a few mouthfuls, kibble disappears, happy lick.
+              r.bowl.visible = s < 0.92;
+              const kib = r.bowl.userData.kibble as THREE.Object3D[];
+              kib.forEach((k, i) => { k.visible = i >= Math.floor(clamp01((s - 0.12) / 0.65) * kib.length); });
+              const d = bump(clamp01(s / 0.85));
+              r.body.rotation.x = 0.42 * d;
+              r.body.position.set(0, -0.12 * d, 0.12 * d);
+              r.head.rotation.x = 0.55 * d + (s > 0.12 && s < 0.8 ? Math.abs(Math.sin(s * Math.PI * 14)) * 0.18 : 0);
+              r.frontLegs.forEach((l) => { l.rotation.x = -0.3 * d; });
+              r.tongue.visible = s > 0.8;
+              tailWag = 1.1;
+              break;
+            }
+            case 'shake': {
+              const d = bump(s);
+              r.body.rotation.z = Math.sin(s * Math.PI * 16) * 0.32 * d;
+              r.head.rotation.z = -Math.sin(s * Math.PI * 16) * 0.4 * d;
+              earPerk = Math.sin(s * Math.PI * 16) * d;
+              tailWag = 1.4;
+              break;
+            }
             case 'pat': {
               const d = bump(s);
               r.head.rotation.z = Math.sin(s * Math.PI * 3) * 0.25 * d;
@@ -522,7 +571,7 @@ export function Pet3D({
 
         r.root.position.set(x, y, z);
         r.root.rotation.y = rotY;
-        if (p.mood === 'sad' && !act && !celebrating && !asleep) r.root.rotation.z = Math.sin(t * 0.8) * 0.04;
+        if ((p.mood === 'sad' || sick) && !act && !celebrating && !asleep) r.root.rotation.z = Math.sin(t * 0.8) * 0.04;
 
         r.shadow.scale.set(Math.max(0.5, 1 - y * 0.5), Math.max(0.5, 1 - y * 0.5) * 0.8, 1);
         (r.shadow.material as THREE.MeshBasicMaterial).opacity = 0.22 * Math.max(0.35, 1 - y * 0.7);

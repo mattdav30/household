@@ -39,7 +39,9 @@ export async function scheduleReminders(s: Summary) {
   if (!me) return;
   const pet = s.pet.name ?? 'Your pet';
   const done = !!s.streaks[s.me]?.done_today;
-  const key = JSON.stringify([s.today, me.reminder_hour, me.evening_nudge, me.step, done, pet]);
+  // When the bowl gets low, to the nearest hour, so the hungry reminder moves when someone feeds the dog.
+  const hungryAt = s.pet.needs ? Math.round(s.pet.needs.hungry_at / 3600000) : 0;
+  const key = JSON.stringify([s.today, me.reminder_hour, me.evening_nudge, me.step, done, pet, hungryAt]);
   if (key === lastKey) return;
   lastKey = key;
   if (!(await ensurePermission())) return;
@@ -56,6 +58,13 @@ export async function scheduleReminders(s: Summary) {
     });
   };
 
+  // Tamagotchi style nudge when the bowl runs low. Kept to daytime hours.
+  if (s.pet.needs) {
+    const when = new Date(Math.max(s.pet.needs.hungry_at, now + 3600000));
+    if (when.getHours() < 8) when.setHours(8, 0, 0, 0);
+    else if (when.getHours() >= 21) { when.setDate(when.getDate() + 1); when.setHours(8, 0, 0, 0); }
+    await schedule(when, `${pet} is getting hungry`, 'The bowl is nearly empty. Ten minutes of moving fills a third of it.', '/dog');
+  }
   for (let i = 0; i < 21; i++) {
     const date = addDays(s.today, i);
     const when = at(date, 0);

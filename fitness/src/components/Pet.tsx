@@ -223,3 +223,27 @@ export function petLine(o: { name: string; mood: Mood; meName: string; partnerNa
   if (o.hour < 17) return 'Is it walk time yet?';
   return 'Ten minutes before dinner?';
 }
+
+/** What the dog says about its needs, most urgent first. Null when all is well, so the walk line shows instead. */
+export function needsLine(pet: { name: string | null; needs: import('../lib/api').Needs }): string | null {
+  const n = pet.needs;
+  if (!n) return null;
+  if (n.sick === 'hungry') return "I'm feeling poorly. My bowl has been empty all day. A walk would fill it up.";
+  if (n.sick === 'dirty') return "I'm feeling poorly and itchy. A bath would help so much.";
+  if (n.napping) return 'Zzz… napping. Back soon.';
+  if (n.food < 15) return 'My tummy is rumbling. Ten minutes of moving fills my bowl.';
+  if (n.mess >= 2) return 'Oops. Could someone tidy the yard?';
+  if (n.clean < 25) return 'I rolled in something. Bath time?';
+  if (n.energy < 15) return "I'm so sleepy. Can I have a nap?";
+  if (n.food < 35) return 'Getting peckish. A walk would fill my bowl.';
+  if (n.fun < 20) return "I'm bored. Come play with me?";
+  if (n.mess === 1) return 'I left a little something in the yard.';
+  return null;
+}
+
+/** The dog's visible state for the 3D view: mud, messes, sleepy eyes, ice pack, napping. */
+export function careOf(pet: { needs: import('../lib/api').Needs }) {
+  const n = pet.needs;
+  if (!n) return null;
+  return { dirt: n.clean < 70 ? (70 - n.clean) / 70 : 0, mess: n.mess, tired: n.energy < 25, sick: !!n.sick, napping: n.napping };
+}

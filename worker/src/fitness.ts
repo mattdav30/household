@@ -62,14 +62,94 @@ const TREATS_PER_SESSION = 6;
 /** The play meter drops two points an hour, so a full meter lasts about two days. */
 const FUN_DECAY_PER_HOUR = 2;
 
-type PetRow = { household_id: string; treats_spent: number; fun: number; fun_at: number; owned: string; wearing: string | null; best_fetch: number; best_catch: number; best_find: number };
+type PetRow = {
+  household_id: string; treats_spent: number; fun: number; fun_at: number; owned: string; wearing: string | null;
+  best_fetch: number; best_catch: number; best_find: number;
+  food: number; food_at: number; energy: number; energy_at: number; nap_until: number; clean: number; clean_at: number; mess_at: number;
+};
 async function petRow(env: Env, householdId: string): Promise<PetRow> {
   const r = await env.DB.prepare('SELECT * FROM fit_pet WHERE household_id = ?').bind(householdId).first<PetRow>();
   if (r) return r;
-  await env.DB.prepare('INSERT OR IGNORE INTO fit_pet (household_id, fun_at, updated_at) VALUES (?, ?, ?)').bind(householdId, now(), now()).run();
+  const t = now();
+  await env.DB.prepare('INSERT OR IGNORE INTO fit_pet (household_id, fun_at, food_at, energy_at, clean_at, mess_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(householdId, t, t, t, t, t, t).run();
   return (await env.DB.prepare('SELECT * FROM fit_pet WHERE household_id = ?').bind(householdId).first<PetRow>())!;
 }
 const funNow = (r: PetRow) => Math.max(0, Math.round(r.fun - ((now() - r.fun_at) / 3600000) * FUN_DECAY_PER_HOUR));
+
+// The dog's needs, Tamagotchi style. Moving is the only way to fill the food bowl.
+const HOUR = 3600000;
+export const NEEDS = {
+  foodPerHour: 3, // a full bowl lasts about a day and a half
+  foodPerMinute: 3.5, // ten minutes of moving is about a third of a bowl, thirty minutes fills it
+  treatFood: 6,
+  cleanPerHour: 1.5, // about three days between baths
+  muddyPerOutdoor: 8, // walks and runs bring back muddy paws
+  energyDayPerHour: 2.5,
+  energyNightPerHour: 12, // 10pm to 6am, the dog sleeps and recharges
+  energyNapPerHour: 70, // a thirty minute nap adds 35
+  napMinutes: 30,
+  gameEnergy: 8,
+  messEveryHours: 7,
+  messMax: 3,
+  sickAfterHours: 12, // an empty bowl or a filthy coat for this long makes the dog poorly
+};
+const OUTDOOR = new Set(['walk', 'jog', 'outdoor', 'sport', 'stairs']);
+const clamp = (x: number) => Math.max(0, Math.min(100, x));
+const foodNow = (r: PetRow, t = now()) => clamp(r.food - ((t - r.food_at) / HOUR) * NEEDS.foodPerHour);
+const cleanNow = (r: PetRow, t = now()) => clamp(r.clean - ((t - r.clean_at) / HOUR) * NEEDS.cleanPerHour);
+const messNow = (r: PetRow, t = now()) => Math.min(NEEDS.messMax, Math.max(0, Math.floor((t - r.mess_at) / (NEEDS.messEveryHours * HOUR))));
+/** Energy falls in the day and climbs back overnight and during naps, so it is stepped through in ten minute slices. */
+function energyNow(r: PetRow, tzMin: number, t = now()) {
+  const step = 10 * 60000;
+  let e = r.energy;
+  for (let x = Math.max(r.energy_at, t - 7 * 24 * HOUR); x < t; x += step) {
+    const span = Math.min(step, t - x) / HOUR;
+    const hour = Math.floor(((x + tzMin * 60000) / HOUR) % 24);
+    const rate = x < r.nap_until ? NEEDS.energyNapPerHour : hour >= 22 || hour < 6 ? NEEDS.energyNightPerHour : -NEEDS.energyDayPerHour;
+    e = clamp(e + rate * span);
+  }
+  return e;
+}
+/** Why the dog is poorly, if it is: the bowl or the coat has been at zero for half a day. */
+function sickNow(r: PetRow, t = now()): null | 'hungry' | 'dirty' {
+  const foodZero = r.food_at + (r.food / NEEDS.foodPerHour) * HOUR;
+  if (t - foodZero >= NEEDS.sickAfterHours * HOUR) return 'hungry';
+  const cleanZero = r.clean_at + (r.clean / NEEDS.cleanPerHour) * HOUR;
+  if (t - cleanZero >= NEEDS.sickAfterHours * HOUR) return 'dirty';
+  return null;
+}
+function needsOf(r: PetRow, tzMin: number) {
+  const t = now();
+  const food = Math.round(foodNow(r, t));
+  const energy = Math.round(energyNow(r, tzMin, t));
+  const clean = Math.round(cleanNow(r, t));
+  const fun = funNow(r);
+  const mess = messNow(r, t);
+  const sick = sickNow(r, t);
+  let wellbeing = Math.round(clamp((food + energy + clean + fun) / 4 - mess * 6));
+  if (sick) wellbeing = Math.min(wellbeing, 20);
+  return {
+    food, energy, clean, fun, mess, sick, wellbeing,
+    napping: t < r.nap_until, nap_ends: t < r.nap_until ? r.nap_until : null,
+    // When the bowl drops below a quarter, for the hungry reminder.
+    hungry_at: food > 25 ? Math.round(t + ((food - 25) / NEEDS.foodPerHour) * HOUR) : t,
+  };
+}
+
+/** Logging movement fills the bowl, lifts the play meter, and outdoor sessions bring back muddy paws. */
+async function feedFromWorkouts(env: Env, householdId: string, sessions: { minutes: number; kind: string }[]) {
+  if (!sessions.length) return;
+  const r = await petRow(env, householdId);
+  const t = now();
+  const minutes = sessions.reduce((a, x) => a + x.minutes, 0);
+  const outdoor = sessions.filter((x) => OUTDOOR.has(x.kind)).length;
+  const food = clamp(foodNow(r, t) + minutes * NEEDS.foodPerMinute);
+  const clean = clamp(cleanNow(r, t) - outdoor * NEEDS.muddyPerOutdoor);
+  const fun = Math.min(100, funNow(r) + 5 * sessions.length);
+  await env.DB.prepare('UPDATE fit_pet SET food = ?, food_at = ?, clean = ?, clean_at = ?, fun = ?, fun_at = ?, updated_at = ? WHERE household_id = ?')
+    .bind(food, t, clean, t, fun, t, t, householdId).run();
+}
 
 const BADGES: { id: string; title: string; desc: string; icon: string }[] = [
   { id: 'first', title: 'First steps', desc: 'Moved for ten minutes', icon: 'shoe-print' },
@@ -207,7 +287,13 @@ async function summary(env: Env, u: User) {
   const maxScore = weights.reduce((a, b) => a + b, 0) * Math.max(1, people.length);
   const ratio = score / maxScore;
   const anyEver = memberRows.some((m) => m.active_days > 0);
-  const mood = !anyEver ? 'new' : ratio >= 0.75 ? 'thrilled' : ratio >= 0.45 ? 'happy' : ratio >= 0.2 ? 'okay' : 'sad';
+  const needs = needsOf(pr, tz(env));
+  // Moving sets the mood. Neglected needs pull it down a notch, and a poorly dog is sad until it is looked after.
+  const LADDER = ['sad', 'okay', 'happy', 'thrilled'] as const;
+  let moodAt = ratio >= 0.75 ? 3 : ratio >= 0.45 ? 2 : ratio >= 0.2 ? 1 : 0;
+  if (needs.wellbeing < 35) moodAt = Math.max(0, moodAt - 1);
+  if (needs.sick) moodAt = 0;
+  const mood = !anyEver && !needs.sick ? 'new' : LADDER[moodAt];
   const growth = memberRows.reduce((a, m) => a + m.active_days, 0);
   let stage = 0;
   STAGES.forEach((st, i) => { if (growth >= st.at) stage = i; });
@@ -246,7 +332,9 @@ async function summary(env: Env, u: User) {
       tricks: STAGES.slice(1, stage + 1).map((st) => st.trick).filter(Boolean),
       treats: Math.max(0, treatsEarned - pr.treats_spent),
       treats_earned: treatsEarned,
-      fun: funNow(pr),
+      fun: needs.fun,
+      needs,
+      age_days: Math.max(0, daysBetween(s.start_date, today)),
       owned: JSON.parse(pr.owned || '[]') as string[],
       wearing: pr.wearing,
       wardrobe: Object.entries(WARDROBE).map(([id, w]) => ({ id, ...w })),
@@ -292,6 +380,8 @@ export function registerFitness(app: App) {
     await c.env.DB.batch(people.map((pid, i) => c.env.DB.prepare(
       'INSERT INTO fit_workouts (id, household_id, user_id, group_id, date, minutes, kind, title, effort, together, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ).bind(ids[i], u.household_id, pid, group, date, minutes, kind, title, effort, people.length > 1 ? 1 : 0, notes, now())));
+    // Only today's sessions feed the dog, so back filling last week does not overfill the bowl.
+    if (date === localDate(tz(c.env))) await feedFromWorkouts(c.env, u.household_id, people.map(() => ({ minutes, kind })));
     return c.json({ ids, summary: await summary(c.env, u) }, 201);
   });
 
@@ -316,11 +406,14 @@ export function registerFitness(app: App) {
         (KINDS as readonly string[]).includes(x.kind ?? '') ? x.kind : 'other', (x.title ?? '').trim().slice(0, 80) || 'Workout',
         now(), (x.source ?? 'health').slice(0, 40), x.external_id)));
       added = res.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+      const today = localDate(tz(c.env));
+      const fed = fresh.filter((x, i) => res[i].meta.changes && x.date === today);
+      await feedFromWorkouts(c.env, u.household_id, fed.map((x) => ({ minutes: Math.round(Number(x.minutes)), kind: x.kind ?? 'other' })));
     }
     return c.json({ added, summary: await summary(c.env, u) });
   });
 
-  // Playing with the dog: pats, treats, tricks and minigames lift the play meter.
+  // Playing with the dog: pats, treats, tricks and minigames lift the play meter. Games tire the dog out a little.
   app.post('/api/fit/pet/play', async (c) => {
     const u = c.get('user');
     const b = await c.req.json<{ kind?: string; score?: number }>();
@@ -328,18 +421,62 @@ export function registerFitness(app: App) {
     const score = Math.max(0, Math.min(100, Math.round(Number(b.score) || 0)));
     const gain: Record<string, number> = { pat: 2, trick: 4, treat: 12, fetch: 6 + score * 3, catch: 6 + Math.round(score / 2), find: 6 + score * 3 };
     if (!(b.kind && b.kind in gain)) return bad('Unknown kind of play.');
+    const t = now();
     let spent = r.treats_spent;
+    let food = foodNow(r, t);
+    let energy = energyNow(r, tz(c.env), t);
+    let napUntil = r.nap_until;
     if (b.kind === 'treat') {
       const earned = ((await c.env.DB.prepare(`SELECT COALESCE(SUM(MIN(minutes / 10, ${TREATS_PER_SESSION})), 0) AS t FROM fit_workouts WHERE household_id = ?`)
         .bind(u.household_id).first<{ t: number }>())?.t ?? 0);
       if (earned - spent < 1) return bad('No treats left. Every ten minutes of moving earns one.');
       spent += 1;
+      food = clamp(food + NEEDS.treatFood);
+      napUntil = Math.min(napUntil, t); // the smell of a treat wakes any dog
     }
+    if (b.kind === 'fetch' || b.kind === 'catch' || b.kind === 'find') energy = clamp(energy - NEEDS.gameEnergy);
+    if (b.kind === 'trick') energy = clamp(energy - 1);
     const fun = Math.min(100, funNow(r) + Math.min(30, gain[b.kind]));
     const best = { fetch: r.best_fetch, catch: r.best_catch, find: r.best_find } as Record<string, number>;
     if (b.kind in best) best[b.kind] = Math.max(best[b.kind], score);
-    await c.env.DB.prepare('UPDATE fit_pet SET fun = ?, fun_at = ?, treats_spent = ?, best_fetch = ?, best_catch = ?, best_find = ?, updated_at = ? WHERE household_id = ?')
-      .bind(fun, now(), spent, best.fetch, best.catch, best.find, now(), u.household_id).run();
+    await c.env.DB.prepare(`UPDATE fit_pet SET fun = ?, fun_at = ?, treats_spent = ?, best_fetch = ?, best_catch = ?, best_find = ?,
+      food = ?, food_at = ?, energy = ?, energy_at = ?, nap_until = ?, updated_at = ? WHERE household_id = ?`)
+      .bind(fun, t, spent, best.fetch, best.catch, best.find, food, t, energy, t, napUntil, t, u.household_id).run();
+    return c.json(await summary(c.env, u));
+  });
+
+  // Looking after the dog: naps, baths and scooping up after it.
+  app.post('/api/fit/pet/care', async (c) => {
+    const u = c.get('user');
+    const b = await c.req.json<{ action?: string }>();
+    const r = await petRow(c.env, u.household_id);
+    const t = now();
+    const energy = energyNow(r, tz(c.env), t);
+    switch (b.action) {
+      case 'nap':
+        if (t < r.nap_until) break;
+        if (energy >= 95) return bad('Not sleepy yet. Too much energy for a nap.');
+        await c.env.DB.prepare('UPDATE fit_pet SET energy = ?, energy_at = ?, nap_until = ?, updated_at = ? WHERE household_id = ?')
+          .bind(energy, t, t + NEEDS.napMinutes * 60000, t, u.household_id).run();
+        break;
+      case 'wake':
+        await c.env.DB.prepare('UPDATE fit_pet SET energy = ?, energy_at = ?, nap_until = ?, updated_at = ? WHERE household_id = ?')
+          .bind(energy, t, Math.min(r.nap_until, t), t, u.household_id).run();
+        break;
+      case 'bath':
+        // Baths are not every dog's favourite, but the towel zoomies after make up for it.
+        await c.env.DB.prepare('UPDATE fit_pet SET clean = 100, clean_at = ?, fun = ?, fun_at = ?, updated_at = ? WHERE household_id = ?')
+          .bind(t, Math.min(100, funNow(r) + 4), t, t, u.household_id).run();
+        break;
+      case 'scoop':
+        if (!messNow(r, t)) break;
+        // Keep the time already counted towards the next mess, so scooping never resets the clock to zero.
+        await c.env.DB.prepare('UPDATE fit_pet SET mess_at = ?, updated_at = ? WHERE household_id = ?')
+          .bind(t - ((t - r.mess_at) % (NEEDS.messEveryHours * HOUR)), t, u.household_id).run();
+        break;
+      default:
+        return bad('Unknown care action.');
+    }
     return c.json(await summary(c.env, u));
   });
 

@@ -40,6 +40,9 @@ export const local = {
   setHealth: (on: boolean) => write('rtt_health', on ? '1' : null),
   healthSynced: () => Number(read('rtt_health_at') ?? 0),
   setHealthSynced: (ms: number) => write('rtt_health_at', String(ms)),
+  /** The food meter the last time the dog screen was open, so a fuller bowl plays the eating animation. */
+  lastFood: () => Number(read('rtt_last_food') ?? -1),
+  setLastFood: (n: number) => write('rtt_last_food', String(Math.round(n))),
   summaryCache: () => read('rtt_summary'),
   setSummaryCache: (json: string) => { if (json.length < 1900) write('rtt_summary', json); },
 };

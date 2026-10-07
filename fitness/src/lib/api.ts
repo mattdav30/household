@@ -84,6 +84,13 @@ export type Pet = {
   owned: string[]; wearing: string | null;
   wardrobe: { id: string; name: string; cost: number }[];
   best: { fetch: number; catch: number; find: number };
+  needs: Needs;
+  age_days: number;
+};
+/** The dog's daily needs, 0 to 100, shared by the household. */
+export type Needs = {
+  food: number; energy: number; clean: number; fun: number; mess: number; wellbeing: number;
+  sick: null | 'hungry' | 'dirty'; napping: boolean; nap_ends: number | null; hungry_at: number;
 };
 export type Badge = { id: string; title: string; desc: string; icon: string; earned: boolean };
 export type Summary = {

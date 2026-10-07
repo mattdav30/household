@@ -8,9 +8,9 @@ import { local } from '../../lib/local';
 import { weatherIcon } from '../../lib/weather';
 import { C, S, tint } from '../../lib/theme';
 import { Appear } from '../../components/Appear';
-import { Button, Card, Chips, ErrorBar, Field, Header, HeaderButton, Icon, IconBadge, Loading, SectionTitle, Swatches, styles as ui, tap } from '../../components/ui';
+import { Button, Card, Chips, ErrorBar, Field, Header, HeaderButton, Icon, IconBadge, Loading, SectionTitle, Swatches, styles as ui, tap, type IconName } from '../../components/ui';
 import { Legend, LogSheet, WeekBars, WorkoutRow, WorkoutSheet, accentOf } from '../../components/fit';
-import { PET_COLORS, petLine } from '../../components/Pet';
+import { PET_COLORS, careOf, needsLine, petLine } from '../../components/Pet';
 import { Pet3D } from '../../components/pet3d/Pet3D';
 
 const greeting = () => {
@@ -63,7 +63,7 @@ export default function Home() {
   const info = TYPE_INFO[session.type];
   const col = accentOf(info.color);
   const showStepUp = me.can_step_up && nextStep && !local.stepUpSnoozed(summary.today);
-  const line = said ?? (pet.fun < 25 && pet.mood !== 'sad' ? "I'm bored. Come play with me?" : petLine({
+  const line = said ?? needsLine(pet) ?? (petLine({
     name: pet.name!, mood: pet.mood, meName: me.name, partnerName: partner?.name ?? null,
     meFed: !!pet.fed[me.id], partnerFed: partner ? !!pet.fed[partner.id] : false, hour: new Date().getHours(),
   }));
@@ -99,7 +99,7 @@ export default function Home() {
           <Appear index={0}>
             <Pressable onPress={() => router.push('/dog')} accessibilityRole="button" accessibilityLabel={`${pet.name}. Open to play.`}
               style={({ pressed }) => [ui.card, { flexDirection: 'row', alignItems: 'center', gap: S.sm, padding: S.sm, opacity: pressed ? 0.9 : 1 }]}>
-              <Pet3D color={pet.color} mood={pet.mood} stage={pet.stage} wearing={pet.wearing} size={140} celebrate={party} interactive={false} />
+              <Pet3D color={pet.color} mood={pet.mood} stage={pet.stage} wearing={pet.wearing} size={140} celebrate={party} interactive={false} care={careOf(pet)} />
               <View style={{ flex: 1, gap: 8, paddingRight: S.sm }}>
                 <Text style={[ui.rowTitle, { fontSize: 17 }]}>{pet.name}</Text>
                 <View style={{ backgroundColor: C.raised, borderRadius: 12, padding: 10 }}>
@@ -113,7 +113,8 @@ export default function Home() {
                     </View>
                   ))}
                 </View>
-                <Text style={{ color: C.accent, fontSize: 12, fontWeight: '700' }}>Play, tricks and treats ›</Text>
+                {pet.needs ? <NeedDots needs={pet.needs} /> : null}
+                <Text style={{ color: C.accent, fontSize: 12, fontWeight: '700' }}>Look after {pet.name} ›</Text>
               </View>
             </Pressable>
           </Appear>
@@ -263,5 +264,22 @@ function Welcome() {
         <Button title="Say hello" onPress={go} busy={busy} />
       </View>
     </ScrollView>
+  );
+}
+
+/** Four small meters for the dog's needs on the Home card. */
+function NeedDots({ needs }: { needs: NonNullable<Summary['pet']['needs']> }) {
+  const items: [IconName, number, string][] = [['food-drumstick', needs.food, '#F2A65A'], ['heart', needs.fun, '#F56F9A'], ['lightning-bolt', needs.energy, '#8B93FF'], ['shimmer', needs.clean, '#5BC0EB']];
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }} accessible accessibilityLabel={`Tummy ${needs.food}, play ${needs.fun}, energy ${needs.energy}, clean ${needs.clean}`}>
+      {items.map(([icon, v, col]) => (
+        <View key={icon} style={{ flex: 1, gap: 3, alignItems: 'center' }}>
+          <Icon name={icon} size={12} color={v < 25 ? C.danger : col} />
+          <View style={{ alignSelf: 'stretch', height: 5, borderRadius: 3, backgroundColor: C.raised, overflow: 'hidden' }}>
+            <View style={{ height: 5, width: `${Math.max(4, v)}%`, backgroundColor: col }} />
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }

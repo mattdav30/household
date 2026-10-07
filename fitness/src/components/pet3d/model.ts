@@ -22,6 +22,11 @@ export type PetRig = {
   shadow: THREE.Mesh;
   ball: THREE.Object3D; // used in fetch
   bone: THREE.Object3D; // treat being eaten
+  mud: THREE.Object3D[]; // muddy patches, more show as the coat gets dirtier
+  bubbles: THREE.Object3D[]; // bath foam, more show as the scrub goes on
+  icePack: THREE.Object3D; // on the head while poorly
+  bowl: THREE.Group; // food bowl for meals, sits on the floor in front
+  messes: THREE.Group; // little messes on the floor around the dog
   dispose: () => void;
 };
 
@@ -344,10 +349,107 @@ export function buildPet(_kind: PetKind, colorHex: string, stage: number, wearin
   }
   bone.visible = false;
 
+  // Mud on the coat, from the paws up, so a little dirt shows on the legs first.
+  const mudMat = mat(0x4a3120, { roughness: 1 });
+  const mudSpots: [THREE.Object3D, number, number, number, number][] = [
+    [frontLegs[0], 0, -0.6, 0.12, 0.11], [frontLegs[1], 0.02, -0.5, 0.12, 0.1], [backLegs[1], 0.05, -0.28, 0.4, 0.11],
+    [backLegs[0], -0.12, 0.02, 0.22, 0.13], [body, 0.35, 0.66, 0.35, 0.13], [body, -0.3, 0.95, 0.25, 0.12],
+    [head, 0.36, 0.22, 0.4, 0.1], [body, 0.05, 0.6, 0.55, 0.12], [head, -0.3, -0.25, 0.48, 0.08],
+  ];
+  const mud = mudSpots.map(([parent, x, y, z, r]) => {
+    // A splat: one blob with a couple of drips around it.
+    const m = new THREE.Group();
+    const main = mesh(sphere(r * 1.3, 10), mudMat);
+    main.scale.set(1, 0.8, 0.4);
+    m.add(main);
+    for (const [dx, dy, k] of [[0.9, -0.5, 0.45], [-0.8, 0.6, 0.35]]) {
+      const drip = mesh(sphere(r * k, 8), mudMat);
+      drip.scale.set(1, 1, 0.4);
+      drip.position.set(r * dx * 1.3, r * dy * 1.3, 0);
+      m.add(drip);
+    }
+    m.position.set(x, y, z + 0.02);
+    m.lookAt(m.position.clone().multiplyScalar(2));
+    m.visible = false;
+    parent.add(m);
+    return m;
+  });
+
+  // Bath foam.
+  const foamMat = mat(0xffffff, { roughness: 0.15, transparent: true, opacity: 0.85, emissive: 0xdde8ff, emissiveIntensity: 0.35 });
+  const bubbles = Array.from({ length: 22 }, (_, i) => {
+    const a = i * 2.4;
+    const yy = 0.45 + (i % 6) * 0.22;
+    const rad = yy > 1.3 ? 0.55 : 0.62;
+    const m = mesh(sphere(0.11 + (i % 3) * 0.045, 10), foamMat);
+    m.position.set(Math.sin(a) * rad, yy + (yy > 1.3 ? 0.25 : 0), Math.cos(a) * rad * 0.9);
+    m.userData.base = m.position.clone();
+    m.visible = false;
+    body.add(m);
+    return m;
+  });
+
+  // Ice pack for a poorly pup.
+  const icePack = new THREE.Group();
+  const pack = mesh(sphere(0.3, 16), mat(0x9fd3f5, { roughness: 0.35 }));
+  pack.scale.set(1, 0.32, 0.85);
+  icePack.add(pack);
+  const capM = mesh(geo(new THREE.CylinderGeometry(0.07, 0.07, 0.08, 12)), mat(0xffffff));
+  capM.position.set(0.22, 0.04, 0);
+  capM.rotation.z = Math.PI / 2;
+  icePack.add(capM);
+  icePack.position.set(0.1, 0.58, 0.05);
+  icePack.rotation.z = -0.2;
+  icePack.visible = false;
+  head.add(icePack);
+
+  // Food bowl with kibble.
+  const bowl = new THREE.Group();
+  const bowlMat = mat(0xe2557b, { roughness: 0.45, side: THREE.DoubleSide });
+  const dish = mesh(geo(new THREE.CylinderGeometry(0.42, 0.3, 0.2, 28, 1, true)), bowlMat);
+  dish.position.y = 0.1;
+  bowl.add(dish);
+  const base = mesh(geo(new THREE.CircleGeometry(0.3, 24)), bowlMat);
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = 0.01;
+  bowl.add(base);
+  const kibbleMat = mat(0xa86b3c, { roughness: 0.9 });
+  const kibble: THREE.Object3D[] = [];
+  for (let i = 0; i < 14; i++) {
+    const a = i * 2.39;
+    const rr = 0.08 + (i % 4) * 0.07;
+    const k = mesh(sphere(0.055, 8), kibbleMat);
+    k.position.set(Math.sin(a) * rr, 0.14 + (i % 3) * 0.02, Math.cos(a) * rr);
+    bowl.add(k);
+    kibble.push(k);
+  }
+  bowl.userData.kibble = kibble;
+  bowl.visible = false;
+
+  // Little messes on the floor, cartoon style.
+  const messes = new THREE.Group();
+  const messMat = mat(0x7a5233, { roughness: 0.55 });
+  const spots = [[-1.45, 0.55], [1.5, 0.2], [-1.1, -0.9]];
+  for (const [mx, mz] of spots) {
+    const g = new THREE.Group();
+    [[0.17, 0], [0.12, 0.09], [0.07, 0.17]].forEach(([r, y]) => {
+      const ring = mesh(geo(new THREE.TorusGeometry(r, 0.06, 8, 18)), messMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.05 + y;
+      g.add(ring);
+    });
+    const tip = mesh(geo(new THREE.ConeGeometry(0.06, 0.12, 10)), messMat);
+    tip.position.y = 0.3;
+    g.add(tip);
+    g.position.set(mx, 0, mz);
+    g.visible = false;
+    messes.add(g);
+  }
+
   root.scale.setScalar(STAGE_SCALE[Math.min(stage, STAGE_SCALE.length - 1)]);
 
   return {
-    root, body, head, ears, tail, frontLegs, backLegs, eyes, mouths, tongue, cheeks, shadow, ball, bone,
+    root, body, head, ears, tail, frontLegs, backLegs, eyes, mouths, tongue, cheeks, shadow, ball, bone, mud, bubbles, icePack, bowl, messes,
     dispose: () => { geos.forEach((g) => g.dispose()); mats.forEach((m) => m.dispose()); },
   };
 }
