@@ -7,7 +7,7 @@ import { expandEvents } from './recur';
 import { holidayEvents } from './holidays';
 import { registerFitness } from './fitness';
 import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, nameKey, normIngredients, sameThing, type Ingredient } from './food';
-import { library, libraryRecipe, LIB_PREFIX, LOOK_CATEGORIES, photoKey, searchLibrary, withPhoto } from './library';
+import { healthy, library, libraryRecipe, LIB_PREFIX, LOOK_CATEGORIES, photoKey, searchLibrary, withPhoto } from './library';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string; ASSETS: Fetcher };
 type User = { id: string; household_id: string; email: string; name: string; color: string; notify_hour?: number | null };
@@ -233,6 +233,7 @@ app.post('/api/events/:id/skip', async (c) => {
 // ---------- Online recipes ----------
 
 const AUSSIE = 'Aussie favourites';
+const HEALTHY = 'Healthy and high protein';
 const NO_CATS = new Set(['Dessert']);
 type Hit = { id: string; title: string; image_url: string | null; category: string | null };
 
@@ -270,7 +271,7 @@ function shuffle<T>(a: T[]): T[] {
 app.get('/api/discover/categories', async (c) => {
   const data = await mealDb('/categories.php', c.executionCtx).catch(() => ({ categories: [] }));
   const online = (data.categories ?? []).filter((x: any) => !NO_CATS.has(x.strCategory)).map((x: any) => ({ name: x.strCategory, image_url: x.strCategoryThumb }));
-  return c.json([{ name: AUSSIE, image_url: null }, ...online]);
+  return c.json([{ name: HEALTHY, image_url: null }, { name: AUSSIE, image_url: null }, ...online]);
 });
 
 app.get('/api/discover/search', async (c) => {
@@ -280,6 +281,10 @@ app.get('/api/discover/search', async (c) => {
   try {
     const photos = await dishPhotos(ctx);
     const hit = (r: (typeof library)[number]) => libHit(r, photos);
+    if (cat === HEALTHY) {
+      const list = library.filter(healthy);
+      return c.json([...list.filter((r) => r.category === 'Healthy'), ...list.filter((r) => r.category !== 'Healthy')].map(hit));
+    }
     if (cat === AUSSIE) {
       const area = await mealDb('/filter.php?a=Australian', ctx).catch(() => ({ meals: null }));
       const sweets = await dessertIds(ctx);

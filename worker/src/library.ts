@@ -3,12 +3,16 @@
 
 import { parseIngredient, type RecipeOut } from './food';
 
-type Entry = { slug: string; title: string; cat: string; hero: string; serves: number; ing: string[]; steps: string[] };
+type Entry = { slug: string; title: string; cat: string; hero: string; serves: number; ing: string[]; steps: string[]; protein?: number };
 
 const IMG = (hero: string) => `https://www.themealdb.com/images/ingredients/${encodeURIComponent(hero)}.png`;
 
 const E = (slug: string, title: string, cat: string, hero: string, ing: string[], steps: string[], serves = 4): Entry =>
   ({ slug, title, cat, hero, serves, ing, steps });
+
+/** A healthy, high protein dinner. Protein is grams per serve, roughly. */
+const H = (slug: string, title: string, protein: number, hero: string, ing: string[], steps: string[], serves = 4): Entry =>
+  ({ slug, title, cat: 'Healthy', hero, serves, ing, steps, protein });
 
 const LIBRARY: Entry[] = [
   // ---------- Beef ----------
@@ -328,10 +332,115 @@ const LIBRARY: Entry[] = [
   E('tofu-stir-fry', 'Crispy tofu stir fry', 'Vegetarian', 'Tofu',
     ['450 g firm tofu', '2 tbsp cornflour', '1 head broccoli', '1 red capsicum', '1 carrot', '2 garlic cloves', '3 tbsp hoisin sauce', '1 tbsp soy sauce', '1 1/2 cups rice', 'Vegetable oil'],
     ['Cook the rice. Cube the tofu, toss in cornflour and fry until crisp.', 'Stir fry the vegetables and garlic for 4 minutes.', 'Add hoisin, soy and a splash of water.', 'Return the tofu, toss and serve with rice.']),
+  // ---------- Healthy and high protein (protein is per serve, approximate) ----------
+  H('h-lemon-chicken-rice', 'Lemon herb chicken, rice and greens', 55, 'Chicken Breast',
+    ['800 g chicken breast', '2 lemons', '3 garlic cloves', '2 tsp dried oregano', '1 tsp smoked paprika', '1 1/2 cups basmati rice', '2 bunches broccolini', '1 cup Greek yoghurt', 'Olive oil'],
+    ['Marinate the chicken in the juice of 1 lemon, 2 crushed garlic cloves, oregano, paprika and 1 tbsp oil for at least 15 minutes.', 'Cook the rice. Pan fry or grill the chicken 5 to 6 minutes each side until cooked, rest and slice.', 'Steam the broccolini.', 'Mix the yoghurt with the last garlic clove, lemon zest and a squeeze of lemon. Serve chicken over rice with greens and the yoghurt sauce.']),
+  H('h-chicken-burrito-bowls', 'Chicken burrito bowls', 50, 'Chicken Breast',
+    ['700 g chicken breast', '2 tsp ground cumin', '2 tsp smoked paprika', '1 tsp chilli powder', '1 cup brown rice', '400 g can black beans', '1 cup corn kernels', '250 g cherry tomatoes', '1 avocado', '1 lime', '1 cup Greek yoghurt', 'Coriander', 'Olive oil'],
+    ['Cook the brown rice. Rub the chicken with the spices, a little oil and salt.', 'Grill or pan fry 5 to 6 minutes each side, rest and slice.', 'Warm the drained beans and corn. Halve the tomatoes and slice the avocado.', 'Build bowls with rice, chicken, beans, corn, tomato and avocado. Top with yoghurt, lime and coriander.']),
+  H('h-honey-sriracha-bowls', 'Honey sriracha chicken bowls', 52, 'Chicken Breast',
+    ['800 g chicken breast', '2 tbsp honey', '2 tbsp sriracha', '2 tbsp soy sauce', '2 garlic cloves', '1 1/2 cups jasmine rice', '2 cups frozen edamame', '1 continental cucumber', '2 carrots', '1 tbsp sesame seeds'],
+    ['Cook the rice and the edamame.', 'Dice the chicken and cook in a hot pan until golden and cooked through.', 'Add honey, sriracha, soy and crushed garlic and toss until sticky.', 'Serve over rice with edamame, sliced cucumber, grated carrot and sesame seeds.']),
+  H('h-greek-chicken-bowls', 'Greek chicken bowls', 50, 'Chicken Breast',
+    ['800 g chicken breast', '2 lemons', '3 garlic cloves', '2 tsp dried oregano', '1 cup quinoa', '1 continental cucumber', '250 g cherry tomatoes', '1 red onion', '1/2 cup kalamata olives', '100 g reduced fat feta', '1 cup Greek yoghurt', 'Olive oil'],
+    ['Marinate the chicken in lemon juice, garlic, oregano and a little oil.', 'Cook the quinoa. Grill the chicken until cooked, rest and slice.', 'Chop cucumber, tomatoes and red onion.', 'Build bowls with quinoa, salad, olives, crumbled feta and chicken. Add a spoon of yoghurt mixed with lemon.']),
+  H('h-ginger-chicken-stir-fry', 'Ginger chicken and vegie stir fry', 48, 'Chicken Breast',
+    ['750 g chicken breast', '2 tbsp grated ginger', '3 garlic cloves', '1 head broccoli', '1 red capsicum', '150 g snow peas', '3 tbsp reduced salt soy sauce', '1 tbsp oyster sauce', '1 tsp sesame oil', '1 1/2 cups jasmine rice', 'Vegetable oil'],
+    ['Cook the rice. Slice the chicken thinly.', 'Stir fry the chicken in a hot oiled wok until cooked. Set aside.', 'Stir fry ginger, garlic, broccoli, capsicum and snow peas for 3 minutes.', 'Return the chicken with soy, oyster sauce, sesame oil and a splash of water. Toss and serve with rice.']),
+  H('h-lighter-butter-chicken', 'Lighter butter chicken', 50, 'Chicken Breast',
+    ['800 g chicken breast', '1 cup Greek yoghurt', '2 tbsp garam masala', '1 tsp ground turmeric', '1 tsp chilli powder', '1 brown onion', '3 garlic cloves', '1 tbsp grated ginger', '400 g can crushed tomatoes', '375 ml can light evaporated milk', '1 1/2 cups basmati rice', '100 g baby spinach'],
+    ['Marinate diced chicken in half the yoghurt with half the spices.', 'Cook onion, garlic and ginger in a little oil, then the rest of the spices for 1 minute.', 'Add the chicken and brown, then the tomatoes. Simmer 15 minutes.', 'Stir in evaporated milk and spinach and warm through. Serve with rice and the rest of the yoghurt.']),
+  H('h-shawarma-bowls', 'Chicken shawarma bowls', 50, 'Chicken Thighs',
+    ['800 g skinless chicken thighs', '2 tsp ground cumin', '2 tsp smoked paprika', '1 tsp ground cinnamon', '1 lemon', '3 garlic cloves', '1 cup brown rice', '1 cos lettuce', '2 tomatoes', '1 continental cucumber', '1/2 cup hummus', '1/2 cup Greek yoghurt'],
+    ['Marinate the chicken in the spices, lemon juice and garlic.', 'Cook the rice. Grill or bake the chicken at 220°C for 20 minutes, rest and slice.', 'Chop the lettuce, tomato and cucumber.', 'Build bowls with rice, salad and chicken, topped with hummus and yoghurt.']),
+  H('h-peri-peri-chicken', 'Peri peri chicken with corn and slaw', 50, 'Chicken Breast',
+    ['800 g chicken breast', '1/3 cup peri peri sauce', '4 corn cobs', '1/4 red cabbage', '2 carrots', '1/2 cup Greek yoghurt', '1 lemon', '600 g sweet potato', 'Olive oil'],
+    ['Cut the sweet potato into wedges, toss in oil and roast at 220°C for 30 minutes.', 'Coat the chicken in peri peri sauce and grill or bake until cooked.', 'Grill the corn until charred.', 'Toss shredded cabbage and carrot with yoghurt and lemon. Serve together.']),
+  H('h-yoghurt-chicken-skewers', 'Yoghurt marinated chicken skewers', 48, 'Chicken Breast',
+    ['800 g chicken breast', '1 cup Greek yoghurt', '1 tbsp curry powder', '1 lemon', '2 garlic cloves', '1 red onion', '1 red capsicum', '1 1/2 cups basmati rice', '1 bag mixed salad leaves'],
+    ['Cube the chicken and marinate in half the yoghurt with curry powder, lemon and garlic for 30 minutes.', 'Thread onto skewers with chunks of onion and capsicum.', 'Grill 10 to 12 minutes, turning, until cooked and charred.', 'Serve with rice, salad and the rest of the yoghurt.']),
+  H('h-chicken-quinoa-salad', 'Chicken, quinoa and roast veg salad', 45, 'Chicken Breast',
+    ['700 g chicken breast', '1 cup quinoa', '500 g pumpkin', '1 red onion', '100 g baby spinach', '100 g reduced fat feta', '1/4 cup pepitas', '1 lemon', 'Olive oil'],
+    ['Roast cubed pumpkin and onion wedges with a little oil at 200°C for 25 minutes.', 'Cook the quinoa. Pan fry the chicken until cooked and slice.', 'Whisk lemon juice with 1 tbsp oil.', 'Toss quinoa, spinach, roast veg, chicken, feta and pepitas with the dressing.']),
+  H('h-chicken-larb', 'Thai chicken larb with rice', 42, 'Chicken',
+    ['700 g chicken mince', '2 limes', '2 tbsp fish sauce', '1 red chilli', '1 red onion', '1 bunch mint', '1 bunch coriander', '1 iceberg lettuce', '1 continental cucumber', '1 1/2 cups jasmine rice'],
+    ['Cook the rice.', 'Cook the mince in a non stick pan with a splash of water until done.', 'Off the heat stir in lime juice, fish sauce, chopped chilli, sliced onion and herbs.', 'Serve with rice, lettuce cups and cucumber.']),
+  H('h-baked-parmi', 'Oven baked chicken parmi', 55, 'Chicken Breast',
+    ['2 large chicken breasts', '2 eggs', '1 cup panko breadcrumbs', '1/2 cup grated parmesan', '1 cup tomato passata', '4 slices lean ham', '1 cup grated light mozzarella', '1 bag mixed salad leaves', '600 g sweet potato'],
+    ['Cut the sweet potato into chips and bake at 220°C for 30 minutes.', 'Halve the breasts horizontally, dip in egg then panko mixed with parmesan. Spray with oil.', 'Bake 15 minutes on a lined tray, then top with passata, ham and mozzarella and bake 8 minutes more.', 'Serve with salad and sweet potato chips.']),
+  H('h-pesto-protein-pasta', 'High protein chicken pesto pasta', 55, 'Chicken Breast',
+    ['600 g chicken breast', '350 g high protein pasta', '1/3 cup basil pesto', '1/2 cup light cream cheese', '250 g cherry tomatoes', '100 g baby spinach', '1/4 cup grated parmesan'],
+    ['Cook the pasta, keeping 1/2 cup of the water.', 'Pan fry diced chicken until cooked. Add the halved tomatoes for 2 minutes.', 'Stir in pesto, cream cheese, spinach and a splash of pasta water until creamy.', 'Toss with the pasta and parmesan.']),
+  H('h-korean-beef-bowls', 'Korean beef bowls', 40, 'Minced Beef',
+    ['600 g lean beef mince', '3 tbsp reduced salt soy sauce', '1 tbsp brown sugar', '1 tbsp gochujang', '2 garlic cloves', '1 tbsp grated ginger', '1 tsp sesame oil', '1 1/2 cups jasmine rice', '1 continental cucumber', '2 carrots', '4 eggs', '4 spring onions'],
+    ['Cook the rice.', 'Brown the mince in a non stick pan. Add garlic, ginger, soy, sugar, gochujang and sesame oil and cook until sticky.', 'Fry or soft boil the eggs.', 'Serve mince over rice with cucumber, grated carrot, an egg and spring onion.']),
+  H('h-steak-sweet-potato', 'Steak, sweet potato and greens', 46, 'Beef',
+    ['800 g lean rump steak', '800 g sweet potato', '2 bunches broccolini', '1 bunch asparagus', '2 garlic cloves', '1 lemon', 'Olive oil'],
+    ['Cut the sweet potato into wedges, toss in a little oil and roast at 220°C for 30 minutes.', 'Season the steak and cook in a hot pan or barbecue to your liking. Rest 5 minutes and slice.', 'Saute the greens with garlic and a squeeze of lemon.', 'Serve the steak with wedges and greens.']),
+  H('h-beef-bean-chilli', 'Lean beef and bean chilli', 45, 'Minced Beef',
+    ['600 g lean beef mince', '1 brown onion', '2 garlic cloves', '1 red capsicum', '2 tsp ground cumin', '2 tsp smoked paprika', '1 tsp chilli powder', '2 x 400 g cans diced tomatoes', '2 x 400 g cans kidney beans', '1 cup brown rice', '1/2 cup Greek yoghurt'],
+    ['Cook onion, garlic and capsicum in a non stick pot, then brown the mince.', 'Add the spices, tomatoes and drained beans. Simmer 25 minutes until thick.', 'Cook the rice.', 'Serve the chilli over rice with a spoon of yoghurt.']),
+  H('h-beef-broccoli', 'Beef and broccoli stir fry', 42, 'Beef',
+    ['700 g lean rump steak', '2 heads broccoli', '3 garlic cloves', '1 tbsp grated ginger', '3 tbsp reduced salt soy sauce', '2 tbsp oyster sauce', '1 tsp cornflour', '1 1/2 cups jasmine rice', 'Vegetable oil'],
+    ['Cook the rice. Slice the beef thinly against the grain.', 'Sear the beef in a very hot wok in batches. Set aside.', 'Stir fry broccoli, garlic and ginger with a splash of water until bright green.', 'Return the beef with soy, oyster sauce and cornflour mixed with 1/4 cup water. Toss until glossy and serve with rice.']),
+  H('h-lentil-bolognese', 'High protein spag bol', 48, 'Minced Beef',
+    ['500 g lean beef mince', '400 g can brown lentils', '1 brown onion', '2 garlic cloves', '2 carrots', '2 zucchinis', '700 g tomato passata', '2 tbsp tomato paste', '350 g high protein pasta', '1/4 cup grated parmesan'],
+    ['Cook onion, garlic and grated carrot and zucchini in a non stick pan.', 'Add mince and brown, then the tomato paste, passata and drained lentils.', 'Simmer 20 minutes.', 'Serve over the pasta with parmesan.']),
+  H('h-salmon-poke', 'Salmon poke bowls', 40, 'Salmon',
+    ['600 g skinless salmon fillets', '3 tbsp reduced salt soy sauce', '1 tsp sesame oil', '1 tbsp honey', '1 1/2 cups sushi rice', '2 cups frozen edamame', '1 avocado', '1 continental cucumber', '2 carrots', '1 tbsp sesame seeds'],
+    ['Cook the rice and the edamame.', 'Cube the salmon and toss with soy, sesame oil and honey. Sear in a hot pan for 2 minutes if you prefer it cooked.', 'Slice the avocado and cucumber and grate the carrot.', 'Build bowls with rice, salmon, edamame and vegetables. Top with sesame seeds.']),
+  H('h-prawn-fried-rice', 'Prawn and egg fried rice', 38, 'Prawns',
+    ['500 g peeled green prawns', '6 eggs', '3 cups cooked brown rice', '2 cups frozen peas', '1 red capsicum', '4 spring onions', '3 garlic cloves', '3 tbsp reduced salt soy sauce', '1 tsp sesame oil', 'Vegetable oil'],
+    ['Scramble the eggs in a hot wok and set aside.', 'Stir fry garlic and prawns until pink. Set aside.', 'Stir fry capsicum and peas, then add the cold rice and fry until hot.', 'Return the eggs and prawns with soy, sesame oil and spring onion.']),
+  H('h-ginger-barramundi', 'Ginger and spring onion barramundi', 42, 'White Fish',
+    ['800 g barramundi fillets', '2 tbsp grated ginger', '1 red chilli', '6 spring onions', '3 tbsp reduced salt soy sauce', '1 bunch bok choy', '2 bunches broccolini', '1 1/2 cups jasmine rice', 'Vegetable oil'],
+    ['Cook the rice.', 'Pan fry the barramundi skin side down until crisp, then flip for 2 minutes.', 'Steam the greens. Heat 1 tbsp oil and sizzle the ginger, chilli and sliced spring onion for 30 seconds.', 'Pour the sizzling oil and soy over the fish. Serve with greens and rice.']),
+  H('h-tuna-pasta-salad', 'Tuna pasta salad', 42, 'Tuna',
+    ['2 x 425 g cans tuna in springwater', '300 g high protein pasta', '1 cup Greek yoghurt', '1 lemon', '1 tbsp Dijon mustard', '250 g cherry tomatoes', '1 continental cucumber', '1 cup corn kernels', '1 red onion', 'Parsley'],
+    ['Cook the pasta and rinse under cold water.', 'Mix the yoghurt with lemon juice and mustard.', 'Chop the tomatoes, cucumber and onion.', 'Toss everything with the drained tuna and dressing. Keeps well for lunches.']),
+  H('h-turkey-meatballs', 'Turkey and zucchini meatballs', 45, 'Minced Beef',
+    ['700 g turkey mince', '1 zucchini', '1 egg', '1/3 cup grated parmesan', '2 garlic cloves', '700 g tomato passata', '1 tsp dried basil', '1 cup brown rice', '100 g baby spinach'],
+    ['Grate the zucchini and squeeze dry. Mix with mince, egg, parmesan and 1 garlic clove. Roll into balls.', 'Bake on a lined tray at 200°C for 15 minutes.', 'Simmer the passata with the other garlic clove and basil, add the meatballs and spinach and simmer 10 minutes.', 'Serve over rice.']),
+  H('h-pork-apple-slaw', 'Pork fillet with apple slaw', 42, 'Pork',
+    ['800 g pork fillet', '2 tsp smoked paprika', '1 tsp fennel seeds', '2 green apples', '1/4 red cabbage', '1/2 cup Greek yoghurt', '1 tbsp seeded mustard', '1 lemon', '800 g baby potatoes', 'Olive oil'],
+    ['Boil the potatoes until tender.', 'Rub the pork with paprika, crushed fennel and a little oil. Sear all over, then roast at 200°C for 15 minutes. Rest and slice.', 'Toss shredded cabbage and matchstick apple with yoghurt, mustard and lemon.', 'Serve pork with potatoes and slaw.']),
+  H('h-lamb-tabouli', 'Lamb backstrap with tabouli and hummus', 42, 'Lamb',
+    ['700 g lamb backstrap', '2 tsp ground cumin', '1 lemon', '1/2 cup burghul', '2 bunches parsley', '1 bunch mint', '3 tomatoes', '4 spring onions', '1/2 cup hummus', '4 wholemeal pita breads', 'Olive oil'],
+    ['Soak the burghul in boiling water for 15 minutes and drain well.', 'Rub the lamb with cumin and a little oil. Cook 4 minutes each side for medium, rest and slice.', 'Chop the herbs, tomato and spring onion and mix with burghul, lemon juice and 1 tbsp oil.', 'Serve lamb with tabouli, hummus and warm pita.']),
+  H('h-protein-frittata', 'High protein vegie frittata', 32, 'Eggs',
+    ['10 eggs', '250 g cottage cheese', '1 red capsicum', '1 zucchini', '100 g baby spinach', '4 spring onions', '100 g reduced fat feta', '1 bag mixed salad leaves'],
+    ['Cook capsicum and zucchini in an ovenproof non stick pan for 4 minutes, then wilt the spinach.', 'Whisk eggs with cottage cheese and spring onion and pour over.', 'Crumble over feta and cook on low for 5 minutes.', 'Finish under the grill until set. Serve with salad.']),
 ];
 
 /** A real dish photo for each recipe: the name of a close match in the online library. */
 const LOOK: Record<string, string> = {
+  "h-lemon-chicken-rice": "Honey Balsamic Chicken with Crispy Broccoli & Potatoes",
+  "h-chicken-burrito-bowls": "Jerk chicken with rice & peas",
+  "h-honey-sriracha-bowls": "Teriyaki Chicken Casserole",
+  "h-greek-chicken-bowls": "Smoky chicken skewers",
+  "h-ginger-chicken-stir-fry": "Stir-fried chicken with chillies & basil",
+  "h-lighter-butter-chicken": "Chicken Handi",
+  "h-shawarma-bowls": "Chicken Shawarma with homemade garlic herb yoghurt sauce",
+  "h-peri-peri-chicken": "Piri-piri chicken and slaw",
+  "h-yoghurt-chicken-skewers": "Red curry chicken kebabs",
+  "h-chicken-quinoa-salad": "Chicken Quinoa Greek Salad",
+  "h-chicken-larb": "Vietnamese chicken salad",
+  "h-baked-parmi": "Milanesa",
+  "h-pesto-protein-pasta": "Chicken Alfredo Primavera",
+  "h-korean-beef-bowls": "Beef Banh Mi Bowls with Sriracha Mayo, Carrot & Pickled Cucumber",
+  "h-steak-sweet-potato": "Bistek",
+  "h-beef-bean-chilli": "Braised Beef Chilli",
+  "h-beef-broccoli": "Beef and Broccoli Stir-Fry",
+  "h-lentil-bolognese": "Spaghetti Bolognese",
+  "h-salmon-poke": "Salmon Avocado Salad",
+  "h-prawn-fried-rice": "Thai fried rice with prawns & peas",
+  "h-ginger-barramundi": "Sea bass with sizzled ginger, chilli & spring onions",
+  "h-tuna-pasta-salad": "Mediterranean Pasta Salad",
+  "h-turkey-meatballs": "Frikadeller - Danish Meatballs",
+  "h-pork-apple-slaw": "Portuguese barbecued pork (Febras assadas)",
+  "h-lamb-tabouli": "Turkish-style lamb",
+  "h-protein-frittata": "Spiced tortilla",
   "spag-bol": "Spaghetti Bolognese",
   "lasagne": "Lasagne",
   "stroganoff": "Beef stroganoff",
@@ -442,7 +551,7 @@ export const LOOK_CATEGORIES = ['Beef', 'Chicken', 'Lamb', 'Pork', 'Seafood', 'V
 
 function toRecipe(e: Entry): RecipeOut {
   return {
-    id: 'mealdb:' + LIB_PREFIX + e.slug, title: e.title, image_url: IMG(e.hero), category: e.cat, area: 'Australian',
+    id: 'mealdb:' + LIB_PREFIX + e.slug, title: e.title, image_url: IMG(e.hero), category: e.cat, area: e.protein ? `About ${e.protein} g protein a serve` : 'Australian',
     ingredients: e.ing.map(parseIngredient), instructions: e.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
     servings: String(e.serves), source: 'mealdb', source_id: LIB_PREFIX + e.slug, source_url: null,
   };
@@ -450,6 +559,11 @@ function toRecipe(e: Entry): RecipeOut {
 
 export const library: RecipeOut[] = LIBRARY.map(toRecipe);
 const bySlug = new Map(library.map((r) => [r.source_id!, r]));
+
+/** Healthy picks: the Healthy recipes plus lighter dinners from the main list. */
+const ALSO_HEALTHY = new Set(['thai-beef-salad', 'salmon-teriyaki', 'barramundi', 'chicken-san-choy-bow', 'pork-san-choy-bow', 'teriyaki-chicken',
+  'chicken-souvlaki', 'lamb-koftas', 'honey-mustard-salmon', 'chicken-satay', 'pork-larb', 'tofu-stir-fry', 'dhal', 'chickpea-curry', 'minestrone', 'shakshuka']);
+export const healthy = (r: RecipeOut) => r.category === 'Healthy' || ALSO_HEALTHY.has((r.source_id ?? '').slice(LIB_PREFIX.length));
 
 export const libraryRecipe = (sourceId: string) => bySlug.get(sourceId) ?? null;
 
@@ -468,7 +582,7 @@ export function searchLibrary(q: string): RecipeOut[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return [];
   return library.filter((r) => {
-    const hay = (r.title + ' ' + r.category + ' ' + r.ingredients.map((i) => i.name).join(' ')).toLowerCase();
+    const hay = (r.title + ' ' + r.category + ' ' + (r.area ?? '') + ' ' + (healthy(r) ? 'healthy protein ' : '') + r.ingredients.map((i) => i.name).join(' ')).toLowerCase();
     return words.every((w) => hay.includes(w.replace(/s$/, '')));
   });
 }
