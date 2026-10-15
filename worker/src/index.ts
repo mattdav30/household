@@ -7,7 +7,7 @@ import { expandEvents } from './recur';
 import { holidayEvents } from './holidays';
 import { registerFitness } from './fitness';
 import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, nameKey, normIngredients, sameThing, type Ingredient } from './food';
-import { library, libraryRecipe, LIB_PREFIX, searchLibrary } from './library';
+import { library, libraryRecipe, LIB_PREFIX, LOOK_CATEGORIES, photoKey, searchLibrary, withPhoto } from './library';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string; ASSETS: Fetcher };
 type User = { id: string; household_id: string; email: string; name: string; color: string; notify_hour?: number | null };
@@ -244,7 +244,22 @@ async function dessertIds(ctx: { waitUntil(p: Promise<unknown>): void }): Promis
   } catch { return new Set(); }
 }
 
-const libHit = (r: (typeof library)[number]): Hit => ({ id: r.id, title: r.title, image_url: r.image_url, category: r.category });
+/** Dish name to photo, from the online library's category lists (cached for a day). */
+async function dishPhotos(ctx: { waitUntil(p: Promise<unknown>): void }): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  await Promise.all(LOOK_CATEGORIES.map(async (cat) => {
+    try {
+      const data = await mealDb('/filter.php?c=' + encodeURIComponent(cat), ctx);
+      for (const m of (data.meals ?? []) as { strMeal: string; strMealThumb: string }[]) out.set(photoKey(m.strMeal), m.strMealThumb);
+    } catch { /* that category keeps the ingredient picture */ }
+  }));
+  return out;
+}
+
+const libHit = (r: (typeof library)[number], photos: Map<string, string>): Hit => {
+  const p = withPhoto(r, photos);
+  return { id: p.id, title: p.title, image_url: p.image_url, category: p.category };
+};
 
 function shuffle<T>(a: T[]): T[] {
   const out = [...a];
@@ -263,17 +278,19 @@ app.get('/api/discover/search', async (c) => {
   const cat = (c.req.query('c') ?? '').trim();
   const ctx = c.executionCtx;
   try {
+    const photos = await dishPhotos(ctx);
+    const hit = (r: (typeof library)[number]) => libHit(r, photos);
     if (cat === AUSSIE) {
       const area = await mealDb('/filter.php?a=Australian', ctx).catch(() => ({ meals: null }));
       const sweets = await dessertIds(ctx);
       const extra: Hit[] = ((area.meals ?? []) as any[]).filter((m) => !sweets.has(m.idMeal))
         .map((m) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: 'Australian' }));
-      return c.json([...library.map(libHit), ...extra]);
+      return c.json([...library.map(hit), ...extra]);
     }
     if (cat) {
       if (NO_CATS.has(cat)) return c.json([]);
       const data = await mealDb('/filter.php?c=' + encodeURIComponent(cat), ctx);
-      const lib = library.filter((r) => r.category === cat).map(libHit);
+      const lib = library.filter((r) => r.category === cat).map(hit);
       return c.json([...lib, ...(data.meals ?? []).map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: cat }))]);
     }
     if (!q) {
@@ -282,7 +299,7 @@ app.get('/api/discover/search', async (c) => {
       const seen = new Set<string>();
       const online: Hit[] = picks.flatMap((p) => p?.meals ?? []).filter((m: any) => !NO_CATS.has(m.strCategory) && !seen.has(m.idMeal) && seen.add(m.idMeal))
         .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory }));
-      return c.json([...shuffle(library).slice(0, 14).map(libHit), ...online]);
+      return c.json([...shuffle(library).slice(0, 14).map(hit), ...online]);
     }
     // Search our library, then the online library by name and by main ingredient, and merge.
     const [byName, byIng, sweets] = await Promise.all([
@@ -294,7 +311,7 @@ app.get('/api/discover/search', async (c) => {
     const online = [...(byName.meals ?? []), ...(byIng.meals ?? [])]
       .filter((m: any) => !NO_CATS.has(m.strCategory) && !sweets.has(m.idMeal) && !seen.has(m.idMeal) && seen.add(m.idMeal))
       .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory ?? null }));
-    return c.json([...searchLibrary(q).map(libHit), ...online]);
+    return c.json([...searchLibrary(q).map(hit), ...online]);
   } catch (e) {
     return bad((e as Error).message, 502);
   }
@@ -304,7 +321,7 @@ app.get('/api/discover/meal/:id', async (c) => {
   const id = c.req.param('id').replace(/^mealdb:/, '');
   if (id.startsWith(LIB_PREFIX)) {
     const r = libraryRecipe(id);
-    return r ? c.json(r) : bad('Recipe not found.', 404);
+    return r ? c.json(withPhoto(r, await dishPhotos(c.executionCtx))) : bad('Recipe not found.', 404);
   }
   const data = await mealDb('/lookup.php?i=' + encodeURIComponent(id), c.executionCtx);
   const m = data.meals?.[0];
@@ -506,7 +523,8 @@ app.get('/api/suggest', async (c) => {
     if (!uses.length) return;
     ideas.set(r.id, { id: r.id, title: r.title, image_url: r.image_url, category: r.category, uses, ...coverage(r.ingredients, names, listed) });
   };
-  library.forEach(consider);
+  const photos = await dishPhotos(c.executionCtx);
+  library.forEach((r) => consider(withPhoto(r, photos)));
 
   // Search the online library by the fresh things we have, fridge and freezer first.
   const order = ['Fridge', 'Freezer', 'Pantry'];

@@ -330,7 +330,115 @@ const LIBRARY: Entry[] = [
     ['Cook the rice. Cube the tofu, toss in cornflour and fry until crisp.', 'Stir fry the vegetables and garlic for 4 minutes.', 'Add hoisin, soy and a splash of water.', 'Return the tofu, toss and serve with rice.']),
 ];
 
+/** A real dish photo for each recipe: the name of a close match in the online library. */
+const LOOK: Record<string, string> = {
+  "spag-bol": "Spaghetti Bolognese",
+  "lasagne": "Lasagne",
+  "stroganoff": "Beef stroganoff",
+  "rissoles": "Karbonader (Lean Beef Patties) with Caramelized Onions",
+  "cottage-pie": "Cumberland Pie",
+  "chilli-con-carne": "Braised Beef Chilli",
+  "black-bean-beef": "Beef and Broccoli Stir-Fry",
+  "mongolian-beef": "Szechuan Beef",
+  "beef-tacos": "Crock Pot Chicken Baked Tacos",
+  "burrito-bowls": "Beef Banh Mi Bowls with Sriracha Mayo, Carrot & Pickled Cucumber",
+  "burgers-with-the-lot": "Aussie Burgers",
+  "pepper-steak": "Steak Diane",
+  "beef-red-wine-casserole": "Beef Bourguignon",
+  "corned-beef": "Corned Beef and Cabbage",
+  "savoury-mince": "Picadillo de Vainicas (Green Beans Picadillo)",
+  "curried-mince": "Kenyan Beef Curry",
+  "beef-rendang": "Beef Rendang",
+  "massaman-beef": "Massaman Beef curry",
+  "meatballs": "Algerian Kefta (Meatballs)",
+  "beef-nachos": "Braised Beef Chilli",
+  "thai-beef-salad": "Steak & Vietnamese noodle salad",
+  "chow-mein": "Beef Lo Mein",
+  "steak-sandwich": "Portuguese prego with green piri-piri",
+  "sausage-casserole": "Bean & Sausage Hotpot",
+  "curried-sausages": "Crispy Sausages and Greens",
+  "bangers-and-mash": "Stamppot",
+  "meat-pies": "Minced Beef Pie",
+  "sausage-rolls": "Paszteciki (Polish Pasties)",
+  "chicken-parmi": "Milanesa",
+  "chicken-schnitzel": "Tonkatsu pork",
+  "honey-soy-drumsticks": "Thai drumsticks",
+  "apricot-chicken": "Sticky Chicken",
+  "butter-chicken": "Chicken Handi",
+  "chicken-satay": "Smoky chicken skewers",
+  "chicken-corn-soup": "Creamy Corn Soup Recipe",
+  "chicken-cacciatore": "Chicken Basquaise",
+  "cashew-chicken": "Kung Pao Chicken",
+  "chicken-fried-rice": "Chicken Fried Rice",
+  "chicken-caesar": "Chicken Salad With Mushrooms and Bacon",
+  "chicken-fajitas": "Chickpea Fajitas",
+  "chicken-laksa": "Laksa King Prawn Noodles",
+  "green-curry": "Thai Green Curry",
+  "chicken-pot-pie": "Chicken Ham and Leek Pie",
+  "roast-chicken": "Poulet Roti a l'Algerienne (Algerian Roast Chicken)",
+  "chicken-san-choy-bow": "Vietnamese chicken salad",
+  "teriyaki-chicken": "Teriyaki Chicken Casserole",
+  "chicken-souvlaki": "Chicken Shawarma with homemade garlic herb yoghurt sauce",
+  "chicken-noodle-soup": "Rosol (Polish Chicken Soup)",
+  "pesto-chicken-pasta": "Chicken Alfredo Primavera",
+  "tuscan-chicken": "Creamy Mustard Chicken",
+  "chicken-korma": "Nutty Chicken Curry",
+  "crumbed-chicken-burgers": "Chick-Fil-A Sandwich",
+  "nasi-goreng": "Nasi lemak",
+  "roast-lamb": "Slow-roast lamb with cinnamon, fennel & citrus",
+  "lamb-chops": "Chilli ginger lamb chops",
+  "lamb-shanks": "Vietnamese lamb shanks with sweet potatoes",
+  "lamb-koftas": "Adana kebab",
+  "rogan-josh": "Lamb Rogan josh",
+  "shepherds-pie": "Pate Chinois",
+  "lamb-stew": "Irish stew",
+  "lamb-cutlets": "Chilli ginger lamb chops",
+  "mongolian-lamb": "Turkish-style lamb",
+  "pork-san-choy-bow": "Vietnamese pork salad",
+  "sweet-and-sour-pork": "Sweet and Sour Pork",
+  "honey-garlic-pork": "Skillet Apple Pork Chops with Roasted Sweet Potatoes & Zucchini",
+  "pulled-pork": "BBQ Pork Sloppy Joes",
+  "pea-and-ham-soup": "Split Pea Soup",
+  "pork-and-apple": "Coddled pork with cider",
+  "carbonara": "Spaghetti alla Carbonara",
+  "sticky-pork-noodles": "Drunken noodles (pad kee mao)",
+  "pork-larb": "Lao Naem Khao",
+  "quiche-lorraine": "Flamiche",
+  "bacon-egg-pie": "Classic Tourtière",
+  "fish-and-chips": "Escovitch Fish",
+  "barramundi": "Barramundi with Moroccan spices",
+  "garlic-prawns": "Garlicky prawns with sherry",
+  "prawn-linguine": "Chilli prawn linguine",
+  "salmon-teriyaki": "Honey Teriyaki Salmon",
+  "honey-mustard-salmon": "Baked salmon with fennel & tomatoes",
+  "tuna-mornay": "Fish pie",
+  "fish-tacos": "Cajun spiced fish tacos",
+  "salmon-patties": "Thai chicken cakes with sweet chilli sauce",
+  "pad-thai": "Pad Thai",
+  "seafood-chowder": "Clam chowder",
+  "thai-fish-cakes": "Thai chicken cakes with sweet chilli sauce",
+  "tuna-pasta-bake": "Spicy Arrabiata Penne",
+  "pumpkin-soup": "Thai pumpkin soup",
+  "minestrone": "Ribollita",
+  "zucchini-slice": "Provençal Omelette Cake",
+  "mushroom-risotto": "Mushroom & Chestnut Rotolo",
+  "pumpkin-risotto": "Squash linguine",
+  "dhal": "Dal fry",
+  "chickpea-curry": "Kidney Bean Curry",
+  "veg-fried-rice": "Chicken Fried Rice",
+  "cannelloni": "Spinach & Ricotta Cannelloni",
+  "mac-and-cheese": "Macaroni Pie",
+  "frittata": "Spanish Tortilla",
+  "shakshuka": "Shakshuka",
+  "falafel-wraps": "Falafel Pita Sandwich with Tahini Sauce",
+  "veg-lasagne": "Lasagne",
+  "loaded-potatoes": "Kumpir",
+  "tofu-stir-fry": "Tofu, greens & cashew stir-fry",
+};
+
 export const LIB_PREFIX = 'aus-';
+/** The online categories that hold every photo we use. */
+export const LOOK_CATEGORIES = ['Beef', 'Chicken', 'Lamb', 'Pork', 'Seafood', 'Vegetarian', 'Pasta', 'Miscellaneous', 'Starter'];
 
 function toRecipe(e: Entry): RecipeOut {
   return {
@@ -344,6 +452,17 @@ export const library: RecipeOut[] = LIBRARY.map(toRecipe);
 const bySlug = new Map(library.map((r) => [r.source_id!, r]));
 
 export const libraryRecipe = (sourceId: string) => bySlug.get(sourceId) ?? null;
+
+const norm = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Swap the ingredient picture for a dish photo, given the online library's name to photo lookup. */
+export function withPhoto<T extends { id: string; image_url: string | null }>(r: T, photos: Map<string, string>): T {
+  if (!r.id.startsWith('mealdb:' + LIB_PREFIX)) return r;
+  const name = LOOK[r.id.slice(('mealdb:' + LIB_PREFIX).length)];
+  const url = name ? photos.get(norm(name)) : undefined;
+  return url ? { ...r, image_url: url } : r;
+}
+export const photoKey = norm;
 
 export function searchLibrary(q: string): RecipeOut[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
