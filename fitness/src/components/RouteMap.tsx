@@ -142,7 +142,7 @@ export function Splits({ splits }: { splits: number[] }) {
         <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: S.sm }}>
           <Text style={[{ color: C.sub, width: 28, fontWeight: '700' }, ui.num]}>{i + 1}</Text>
           <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: C.raised, overflow: 'hidden' }}>
-            <View style={{ height: 10, width: `${Math.max(12, 100 - ((s - fastest) / Math.max(1, slowest - fastest)) * 60)}%`, backgroundColor: s === fastest ? C.green : tint(C.accent, 0.7) }} />
+            <View style={{ height: 10, width: `${Math.max(12, 100 - ((s - fastest) / Math.max(1, slowest - fastest)) * 60)}%`, backgroundColor: s === fastest ? C.green : tint(ROUTE_BLUE, 0.75) }} />
           </View>
           <Text style={[{ color: C.ink, width: 52, textAlign: 'right', fontWeight: '700' }, ui.num]}>{fmtPace(s)}</Text>
         </View>
@@ -151,3 +151,36 @@ export function Splits({ splits }: { splits: number[] }) {
   );
 }
 
+
+/** Height along the route as a filled line, with total climb and descent. Height comes from GPS, so it is rounded. */
+export function Elevation({ profile, climb, descent, width }: { profile: [number, number][]; climb: number; descent: number; width: number }) {
+  if (profile.length < 3) return null;
+  const h = 84;
+  const inner = width - S.lg * 2 - 4;
+  const maxD = Math.max(1, profile[profile.length - 1][0]);
+  const alts = profile.map((p) => p[1]);
+  const lo = Math.min(...alts);
+  const hi = Math.max(...alts);
+  const span = Math.max(10, hi - lo); // flat walks still show a gentle line, not exaggerated bumps
+  const mid = (hi + lo) / 2;
+  const y = (a: number) => h - 8 - ((a - (mid - span / 2)) / span) * (h - 16);
+  const pts = profile.map(([d, a]) => `${((d / maxD) * inner).toFixed(1)},${y(a).toFixed(1)}`);
+  const area = `M0,${h} L${pts.join(' L')} L${inner},${h} Z`;
+  return (
+    <View style={[ui.card, { gap: S.sm }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={[ui.label, { flex: 1 }]}>Elevation</Text>
+        <Text style={{ color: C.sub, fontSize: 13, fontWeight: '700' }}>↑ {climb} m   ↓ {descent} m</Text>
+      </View>
+      <Svg width={inner} height={h}>
+        <Path d={area} fill={ROUTE_BLUE} fillOpacity={0.18} />
+        <Polyline points={pts.join(' ')} fill="none" stroke={ROUTE_BLUE} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+      </Svg>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ color: C.faint, fontSize: 11 }}>0 km</Text>
+        <Text style={{ color: C.faint, fontSize: 11 }}>Range {Math.round(hi - lo)} m</Text>
+        <Text style={{ color: C.faint, fontSize: 11 }}>{(maxD / 1000).toFixed(1)} km</Text>
+      </View>
+    </View>
+  );
+}

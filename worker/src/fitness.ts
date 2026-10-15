@@ -445,7 +445,7 @@ export function registerFitness(app: App) {
   app.post('/api/fit/workouts', async (c) => {
     const u = c.get('user');
     const b = await c.req.json<{ date?: string; minutes?: number; kind?: string; title?: string; effort?: number; together?: boolean; notes?: string;
-      route?: { distance_m?: number; moving_s?: number; climb_m?: number; polyline?: string; splits?: number[]; started_at?: number } }>();
+      route?: { distance_m?: number; moving_s?: number; elapsed_s?: number; climb_m?: number; descent_m?: number; polyline?: string; splits?: number[]; profile?: [number, number][]; started_at?: number } }>();
     const minutes = Math.round(Number(b.minutes));
     if (!(minutes >= 1 && minutes <= 600)) return bad('Enter between 1 and 600 minutes.');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date ?? '') ? b.date! : localDate(tz(c.env));
@@ -465,10 +465,14 @@ export function registerFitness(app: App) {
     const rt = b.route;
     if (rt && typeof rt.polyline === 'string' && rt.polyline.length <= 200000 && Number(rt.distance_m) >= 0) {
       const splits = Array.isArray(rt.splits) ? rt.splits.filter((x) => typeof x === 'number' && x > 0).slice(0, 200) : [];
+      const profile = Array.isArray(rt.profile)
+        ? rt.profile.filter((p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && isFinite(v))).slice(0, 200) : [];
       await c.env.DB.batch(ids.map((id) => c.env.DB.prepare(
-        'INSERT OR REPLACE INTO fit_routes (workout_id, household_id, distance_m, moving_s, climb_m, polyline, splits, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      ).bind(id, u.household_id, Math.round(Number(rt.distance_m)), Math.round(Number(rt.moving_s) || minutes * 60), Math.max(0, Math.round(Number(rt.climb_m) || 0)),
-        rt.polyline, JSON.stringify(splits), Number(rt.started_at) || null, now())));
+        `INSERT OR REPLACE INTO fit_routes (workout_id, household_id, distance_m, moving_s, elapsed_s, climb_m, descent_m, polyline, splits, profile, started_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(id, u.household_id, Math.round(Number(rt.distance_m)), Math.round(Number(rt.moving_s) || minutes * 60), Math.round(Number(rt.elapsed_s)) || null,
+        Math.max(0, Math.round(Number(rt.climb_m) || 0)), Math.max(0, Math.round(Number(rt.descent_m) || 0)),
+        rt.polyline, JSON.stringify(splits), JSON.stringify(profile), Number(rt.started_at) || null, now())));
     }
     // Only today's sessions feed the dog, so back filling last week does not overfill the bowl.
     if (date === localDate(tz(c.env))) await feedFromWorkouts(c.env, u.household_id, people.map(() => ({ minutes, kind })));
@@ -600,9 +604,9 @@ export function registerFitness(app: App) {
 
   app.get('/api/fit/routes/:id', async (c) => {
     const r = await c.env.DB.prepare('SELECT * FROM fit_routes WHERE workout_id = ? AND household_id = ?').bind(c.req.param('id'), c.get('user').household_id)
-      .first<{ splits: string } & Record<string, unknown>>();
+      .first<{ splits: string; profile: string } & Record<string, unknown>>();
     if (!r) return bad('No route for this session.', 404);
-    return c.json({ ...r, splits: JSON.parse(r.splits || '[]') });
+    return c.json({ ...r, splits: JSON.parse(r.splits || '[]'), profile: JSON.parse(r.profile || '[]') });
   });
 
   // Deleting one row of a shared session removes both people's rows.

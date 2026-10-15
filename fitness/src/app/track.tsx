@@ -14,7 +14,7 @@ import {
   askGps, clearTrack, currentTrack, encodeTrack, finishTrack, fmtKm, fmtPace, fmtTime, onTrack, pauseTrack, quickFix,
   resumeTrack, resumeWatching, startTrack, statsOf, stopWatching, type GpsAccess, type Track, type TrackKind,
 } from '../lib/gps';
-import { RouteMap, Splits } from '../components/RouteMap';
+import { Elevation, RouteMap, Splits } from '../components/RouteMap';
 import { Button, Chips, Icon, IconBadge, styles as ui, tap } from '../components/ui';
 
 type Phase = 'ready' | 'live' | 'finish';
@@ -123,7 +123,10 @@ export default function TrackScreen() {
         method: 'POST',
         body: {
           minutes, kind: tr.kind === 'run' ? 'jog' : 'walk', title: `${km} km ${tr.kind}`, effort: Number(effort), together,
-          route: { distance_m: Math.round(stats.distance), moving_s: Math.round(stats.activeMs / 1000), climb_m: stats.climb, polyline: encodeTrack(tr.points), splits: stats.splits, started_at: tr.startedAt },
+          route: {
+            distance_m: Math.round(stats.distance), moving_s: Math.round(stats.activeMs / 1000), elapsed_s: Math.round(stats.elapsedMs / 1000),
+            climb_m: stats.climb, descent_m: stats.descent, polyline: encodeTrack(tr.points), splits: stats.splits, profile: stats.profile, started_at: tr.startedAt,
+          },
         },
       });
       apply(r.summary);
@@ -178,10 +181,14 @@ export default function TrackScreen() {
         <RouteMap segments={segmentsOf(tr)} width={mapW} height={260} />
         <View style={{ flexDirection: 'row', gap: S.sm }}>
           <Big label="Distance" value={fmtKm(stats.distance)} unit="km" />
-          <Big label="Time" value={fmtTime(stats.activeMs)} />
-          <Big label="Pace" value={fmtPace(stats.pace)} unit="/km" />
+          <Big label="Avg pace" value={fmtPace(stats.pace)} unit="/km" />
+          <Big label="Climb" value={String(stats.climb)} unit="m" />
         </View>
-        {stats.climb ? <Text style={{ color: C.sub }}>Climbed {stats.climb} m</Text> : null}
+        <View style={{ flexDirection: 'row', gap: S.sm }}>
+          <Big label="Moving time" value={fmtTime(stats.activeMs)} />
+          <Big label="Total time" value={fmtTime(stats.elapsedMs)} />
+        </View>
+        <Elevation profile={stats.profile} climb={stats.climb} descent={stats.descent} width={mapW} />
         <Splits splits={stats.splits} />
         <Chips label="How did that feel?" value={effort} onChange={setEffort} options={[{ value: '1', label: 'Easy' }, { value: '2', label: 'Solid' }, { value: '3', label: 'Tough' }]} />
         <Button title="Save" icon="check" onPress={save} busy={busy} />
@@ -194,7 +201,7 @@ export default function TrackScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top + S.md, paddingBottom: insets.bottom + S.lg, paddingHorizontal: S.lg, gap: S.md }}>
       <Top title={paused ? 'Paused' : tr.kind === 'run' ? 'Running' : 'Walking'} sub={access === 'foreground' ? 'Keep Tandem open on screen while you go' : 'Tracking carries on with the screen off'} />
-      <RouteMap segments={segmentsOf(tr)} here={paused ? null : last} width={mapW} height={Math.max(220, height * 0.36)} />
+      <RouteMap segments={segmentsOf(tr)} here={paused ? null : last} width={mapW} height={Math.max(200, height * 0.3)} />
       <View style={{ alignItems: 'center' }}>
         <Text style={[{ color: C.ink, fontSize: 64, fontWeight: '800', letterSpacing: -2 }, ui.num]} accessibilityLabel={`${fmtKm(stats.distance)} kilometres`}>{fmtKm(stats.distance)}</Text>
         <Text style={{ color: C.sub, fontWeight: '700', marginTop: -6 }}>KILOMETRES</Text>
@@ -202,7 +209,10 @@ export default function TrackScreen() {
       <View style={{ flexDirection: 'row', gap: S.sm }}>
         <Big label="Time" value={fmtTime(stats.activeMs)} />
         <Big label="Avg pace" value={fmtPace(stats.pace)} unit="/km" />
-        <Big label="Now" value={fmtPace(stats.nowPace)} unit="/km" />
+      </View>
+      <View style={{ flexDirection: 'row', gap: S.sm }}>
+        <Big label="Pace now" value={fmtPace(stats.nowPace)} unit="/km" />
+        <Big label="Climb" value={String(stats.climb)} unit="m" />
       </View>
       {!last && !paused ? <Text style={{ color: C.sub, textAlign: 'center' }}>Finding you… head outside for a clear view of the sky.</Text> : null}
       <View style={{ flex: 1 }} />

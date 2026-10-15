@@ -3,7 +3,7 @@ import { Alert, Pressable, Switch, Text, View, useWindowDimensions } from 'react
 import { C, S, tint } from '../lib/theme';
 import { api, changes, type Route, type Summary, type Workout } from '../lib/api';
 import { decodeTrack, fmtKm, fmtPace, fmtTime } from '../lib/gps';
-import { RouteMap, Splits } from './RouteMap';
+import { Elevation, RouteMap, Splits } from './RouteMap';
 import { today as todayIso, friendly } from '../lib/dates';
 import { useStore } from '../lib/store';
 import { Button, Chips, Field, Icon, Sheet, styles as ui, tap, DateField, type IconName } from './ui';
@@ -200,7 +200,15 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
           {route ? (
             <View style={{ gap: S.sm }}>
               <RouteMap segments={decodeTrack(route.polyline)} width={width - S.lg * 2 - 2} height={220} />
-              <Text style={{ color: C.sub }}>Pace {fmtPace(route.distance_m > 50 ? route.moving_s / (route.distance_m / 1000) : null)} /km · moving {fmtTime(route.moving_s * 1000)}{route.climb_m ? ` · climbed ${route.climb_m} m` : ''}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
+                <Stat2 label="Distance" value={`${fmtKm(route.distance_m)} km`} />
+                <Stat2 label="Avg pace" value={`${fmtPace(route.distance_m > 50 ? route.moving_s / (route.distance_m / 1000) : null)} /km`} />
+                <Stat2 label="Moving time" value={fmtTime(route.moving_s * 1000)} />
+                {route.elapsed_s ? <Stat2 label="Total time" value={fmtTime(route.elapsed_s * 1000)} /> : null}
+                <Stat2 label="Climb" value={`${route.climb_m} m`} />
+                <Stat2 label="Descent" value={`${route.descent_m ?? 0} m`} />
+              </View>
+              <Elevation profile={route.profile ?? []} climb={route.climb_m} descent={route.descent_m ?? 0} width={width - S.lg * 2 - 2} />
               <Splits splits={route.splits} />
             </View>
           ) : null}
@@ -229,5 +237,14 @@ export function WorkoutRow({ w, first, onPress }: { w: Workout; first?: boolean;
       <Text style={[{ color: C.ink, fontWeight: '700' }, ui.num]}>{w.distance_m ? `${fmtKm(w.distance_m)} km` : `${w.minutes} min`}</Text>
       <Icon name={w.distance_m ? 'map-marker-path' : 'chevron-right'} size={18} color={C.faint} />
     </Pressable>
+  );
+}
+
+function Stat2({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ width: '31%', backgroundColor: C.raised, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10 }}>
+      <Text style={{ color: C.sub, fontSize: 11, fontWeight: '700' }}>{label}</Text>
+      <Text style={[{ color: C.ink, fontSize: 15, fontWeight: '800' }, ui.num]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    </View>
   );
 }

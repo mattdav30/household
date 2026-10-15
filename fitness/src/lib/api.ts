@@ -69,7 +69,10 @@ export type Workout = {
   /** Set when the session was tracked with GPS. */
   distance_m?: number | null;
 };
-export type Route = { workout_id: string; distance_m: number; moving_s: number; climb_m: number; polyline: string; splits: number[]; started_at: number | null };
+export type Route = {
+  workout_id: string; distance_m: number; moving_s: number; elapsed_s: number | null; climb_m: number; descent_m: number;
+  polyline: string; splits: number[]; profile: [number, number][]; started_at: number | null;
+};
 export type Streak = { days: number; best: number; done_today: boolean; shields_left: number };
 export type FitMember = {
   id: string; name: string; color: string; level: number; reminder_hour: number | null; evening_nudge: boolean;

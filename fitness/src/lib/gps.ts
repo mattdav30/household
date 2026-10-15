@@ -191,7 +191,11 @@ export function clearTrack() {
 /** Stops listening when leaving the tracker screen. Background tracking carries on. */
 export function stopWatching() { watcher?.remove(); watcher = null; }
 
-export type Stats = { activeMs: number; distance: number; pace: number | null; nowPace: number | null; splits: number[]; climb: number };
+/** profile: [distance in metres, height in metres] pairs, smoothed, at most 120 of them. */
+export type Stats = {
+  activeMs: number; elapsedMs: number; distance: number; pace: number | null; nowPace: number | null; splits: number[];
+  climb: number; descent: number; profile: [number, number][];
+};
 /** Time, distance, average and current pace (seconds per km), kilometre splits (seconds each) and climb (metres). */
 export function statsOf(tr: Track, now = Date.now()): Stats {
   const activeMs = Math.max(0, (tr.pausedAt ?? now) - tr.startedAt - tr.pausedMs);
@@ -200,7 +204,10 @@ export function statsOf(tr: Track, now = Date.now()): Stats {
   const splits: number[] = [];
   let nextKm = 1000;
   let lastSplitA = 0;
+  let descent = 0;
   let altBase: number | null = null;
+  const raw: [number, number][] = [];
+  if (tr.points[0]?.alt != null) raw.push([0, tr.points[0].alt]);
   for (let i = 1; i < tr.points.length; i++) {
     const a = tr.points[i - 1];
     const b = tr.points[i];
@@ -219,7 +226,8 @@ export function statsOf(tr: Track, now = Date.now()): Stats {
     if (b.alt != null) {
       if (altBase == null) altBase = b.alt;
       else if (b.alt - altBase >= 3) { climb += b.alt - altBase; altBase = b.alt; }
-      else if (altBase - b.alt >= 3) altBase = b.alt;
+      else if (altBase - b.alt >= 3) { descent += altBase - b.alt; altBase = b.alt; }
+      raw.push([distance, b.alt]);
     }
   }
   const pace = distance >= 50 ? activeMs / 1000 / (distance / 1000) : null;
@@ -234,7 +242,28 @@ export function statsOf(tr: Track, now = Date.now()): Stats {
     const span = (last.a - pts[j].a) / 1000;
     if (d > 15 && span > 5) nowPace = span / (d / 1000);
   }
-  return { activeMs, distance, pace, nowPace, splits, climb: Math.round(climb) };
+  return {
+    activeMs, elapsedMs: Math.max(0, (tr.pausedAt ?? now) - tr.startedAt), distance, pace, nowPace, splits,
+    climb: Math.round(climb), descent: Math.round(descent), profile: smoothProfile(raw),
+  };
+}
+
+/** Evens out GPS height wobble with a rolling average over about 60 metres, then keeps at most 120 points. */
+function smoothProfile(raw: [number, number][]): [number, number][] {
+  if (raw.length < 3) return [];
+  const out: [number, number][] = [];
+  let j = 0;
+  let k = 0;
+  let sum = 0;
+  for (let i = 0; i < raw.length; i++) {
+    while (k < raw.length && raw[k][0] <= raw[i][0] + 30) { sum += raw[k][1]; k++; }
+    while (raw[j][0] < raw[i][0] - 30) { sum -= raw[j][1]; j++; }
+    out.push([raw[i][0], sum / (k - j)]);
+  }
+  const step = Math.max(1, Math.ceil(out.length / 120));
+  const kept = out.filter((_, i) => i % step === 0);
+  if (kept[kept.length - 1] !== out[out.length - 1]) kept.push(out[out.length - 1]);
+  return kept.map(([d, a]) => [Math.round(d), Math.round(a * 10) / 10]);
 }
 
 export const fmtKm = (m: number) => (m / 1000).toFixed(m < 10000 ? 2 : 1);
