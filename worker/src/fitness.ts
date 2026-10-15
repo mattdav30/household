@@ -17,7 +17,7 @@ const tz = (env: Env) => Number(env.TZ_OFFSET_MIN ?? 600);
 /** Ten minutes of anything feeds the pet and keeps a streak alive. */
 export const FLOOR_MIN = 10;
 const SHIELDS_PER_MONTH = 2;
-export const KINDS = ['home', 'walk', 'jog', 'stairs', 'partner', 'dance', 'stretch', 'outdoor', 'sport', 'other'] as const;
+export const KINDS = ['home', 'walk', 'jog', 'stairs', 'partner', 'dance', 'stretch', 'outdoor', 'sport', 'gym', 'other'] as const;
 
 /** The ladder. Everyone starts where they are comfortable and climbs one step at a time. */
 export const STEPS = [
@@ -220,7 +220,7 @@ async function summary(env: Env, u: User) {
     env.DB.prepare('SELECT user_id, date, SUM(minutes) AS m FROM fit_workouts WHERE household_id = ? AND date >= ? GROUP BY user_id, date').bind(u.household_id, since),
     env.DB.prepare(`SELECT w.*, r.distance_m FROM fit_workouts w LEFT JOIN fit_routes r ON r.workout_id = w.id
       WHERE w.household_id = ? ORDER BY w.date DESC, w.created_at DESC LIMIT 12`).bind(u.household_id),
-    env.DB.prepare(`SELECT user_id, SUM(together) AS together, SUM(CASE WHEN kind IN ('home', 'partner', 'stairs', 'jog') THEN 1 ELSE 0 END) AS workouts
+    env.DB.prepare(`SELECT user_id, SUM(together) AS together, SUM(CASE WHEN kind IN ('home', 'partner', 'stairs', 'jog', 'gym') THEN 1 ELSE 0 END) AS workouts
       FROM fit_workouts WHERE household_id = ? GROUP BY user_id`).bind(u.household_id),
     env.DB.prepare(`SELECT COALESCE(SUM(MIN(minutes / 10, ${TREATS_PER_SESSION})), 0) AS t FROM fit_workouts WHERE household_id = ?`).bind(u.household_id),
     env.DB.prepare(`SELECT w.user_id, SUM(r.distance_m) AS m FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id
@@ -349,7 +349,138 @@ async function summary(env: Env, u: User) {
   };
 }
 
+type SetIn = { move_id?: string; move_name?: string; track?: string; ord?: number; set_no?: number; weight_kg?: number | null; reps?: number | null; seconds?: number | null; distance_m?: number | null };
+type Pb = { move_id: string; move_name: string; kind: 'weight' | 'e1rm' | 'reps' | 'time' | 'distance' | 'volume'; value: number; previous: number };
+const TRACKS = ['weight', 'reps', 'time', 'cardio'];
+const e1rm = (kg: number, reps: number) => (reps <= 1 ? kg : kg * (1 + reps / 30));
+const num = (v: unknown, max: number) => (typeof v === 'number' && isFinite(v) && v > 0 && v <= max ? v : null);
+
+/** Saves the sets and returns any personal bests they beat. The first time you do a move sets the bar, with no PB. */
+async function saveSets(env: Env, u: User, workoutId: string, date: string, raw: SetIn[]): Promise<Pb[]> {
+  const sets = raw.slice(0, 400).filter((x) => typeof x.move_id === 'string' && x.move_id.length <= 80 && TRACKS.includes(x.track ?? '')).map((x, i) => ({
+    move_id: x.move_id!, move_name: String(x.move_name ?? x.move_id).trim().slice(0, 80) || x.move_id!, track: x.track!,
+    ord: Math.max(0, Math.round(Number(x.ord) || 0)), set_no: Math.max(1, Math.round(Number(x.set_no) || i + 1)),
+    weight_kg: num(x.weight_kg, 1000), reps: num(x.reps, 1000) != null ? Math.round(x.reps!) : null,
+    seconds: num(x.seconds, 86400) != null ? Math.round(x.seconds!) : null, distance_m: num(x.distance_m, 1e6) != null ? Math.round(x.distance_m!) : null,
+  })).filter((x) => x.weight_kg != null || x.reps != null || x.seconds != null || x.distance_m != null);
+  if (!sets.length) return [];
+  const moves = [...new Set(sets.map((x) => x.move_id))];
+  const prev = (await env.DB.prepare(`SELECT move_id, MAX(weight_kg) AS w, MAX(CASE WHEN weight_kg IS NOT NULL AND reps IS NOT NULL THEN weight_kg * (CASE WHEN reps <= 1 THEN 1 ELSE 1 + reps / 30.0 END) END) AS e,
+      MAX(CASE WHEN weight_kg IS NULL THEN reps END) AS r, MAX(seconds) AS s, MAX(distance_m) AS d
+    FROM fit_sets WHERE user_id = ? AND move_id IN (${moves.map(() => '?').join(',')}) GROUP BY move_id`).bind(u.id, ...moves)
+    .all<{ move_id: string; w: number | null; e: number | null; r: number | null; s: number | null; d: number | null }>()).results;
+  const prevVol = (await env.DB.prepare(`SELECT move_id, MAX(v) AS v FROM (SELECT move_id, workout_id, SUM(weight_kg * reps) AS v FROM fit_sets
+    WHERE user_id = ? AND weight_kg IS NOT NULL AND reps IS NOT NULL AND move_id IN (${moves.map(() => '?').join(',')}) GROUP BY move_id, workout_id) GROUP BY move_id`).bind(u.id, ...moves)
+    .all<{ move_id: string; v: number }>()).results;
+  const pbs: Pb[] = [];
+  for (const m of moves) {
+    const p = prev.find((x) => x.move_id === m);
+    if (!p) continue;
+    const mine = sets.filter((x) => x.move_id === m);
+    const name = mine[0].move_name;
+    const best = (vals: (number | null)[]) => Math.max(0, ...vals.filter((v): v is number => v != null));
+    const w = best(mine.map((x) => (x.reps ? x.weight_kg : null)));
+    const e = best(mine.map((x) => (x.weight_kg != null && x.reps ? e1rm(x.weight_kg, x.reps) : null)));
+    const r = best(mine.map((x) => (x.weight_kg == null ? x.reps : null)));
+    const sec = best(mine.map((x) => (x.track === 'time' ? x.seconds : null)));
+    const d = best(mine.map((x) => x.distance_m));
+    const vol = mine.reduce((a, x) => a + (x.weight_kg != null && x.reps ? x.weight_kg * x.reps : 0), 0);
+    const pv = prevVol.find((x) => x.move_id === m)?.v ?? 0;
+    if (p.w != null && w > p.w) pbs.push({ move_id: m, move_name: name, kind: 'weight', value: w, previous: p.w });
+    else if (p.e != null && e > p.e + 0.01) pbs.push({ move_id: m, move_name: name, kind: 'e1rm', value: Math.round(e * 10) / 10, previous: Math.round(p.e * 10) / 10 });
+    if (p.r != null && r > p.r) pbs.push({ move_id: m, move_name: name, kind: 'reps', value: r, previous: p.r });
+    if (p.s != null && sec > p.s) pbs.push({ move_id: m, move_name: name, kind: 'time', value: sec, previous: p.s });
+    if (p.d != null && d > p.d) pbs.push({ move_id: m, move_name: name, kind: 'distance', value: d, previous: p.d });
+    if (pv > 0 && vol > pv) pbs.push({ move_id: m, move_name: name, kind: 'volume', value: Math.round(vol), previous: Math.round(pv) });
+  }
+  const t = now();
+  for (let i = 0; i < sets.length; i += 50) {
+    await env.DB.batch(sets.slice(i, i + 50).map((x) => env.DB.prepare(
+      `INSERT INTO fit_sets (id, workout_id, household_id, user_id, date, move_id, move_name, track, ord, set_no, weight_kg, reps, seconds, distance_m, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(uid('fs_'), workoutId, u.household_id, u.id, date, x.move_id, x.move_name, x.track, x.ord, x.set_no, x.weight_kg, x.reps, x.seconds, x.distance_m, t)));
+  }
+  return pbs;
+}
+
 export function registerFitness(app: App) {
+  // Your own workouts, shared with your partner so either of you can use them.
+  app.get('/api/fit/templates', async (c) => {
+    const rows = (await c.env.DB.prepare('SELECT * FROM fit_templates WHERE household_id = ? ORDER BY updated_at DESC').bind(c.get('user').household_id).all<{ items: string }>()).results;
+    return c.json(rows.map((r) => ({ ...r, items: JSON.parse(r.items || '[]') })));
+  });
+  const cleanItems = (items: unknown) => (Array.isArray(items) ? items : []).slice(0, 60).filter((x) => x && typeof x.move_id === 'string').map((x) => ({
+    move_id: String(x.move_id).slice(0, 80), move_name: String(x.move_name ?? '').slice(0, 80), track: TRACKS.includes(x.track) ? x.track : 'weight',
+    sets: Math.min(20, Math.max(1, Math.round(Number(x.sets) || 3))), reps: num(x.reps, 1000), weight_kg: num(x.weight_kg, 1000), seconds: num(x.seconds, 86400),
+  }));
+  app.post('/api/fit/templates', async (c) => {
+    const u = c.get('user');
+    const b = await c.req.json<{ name?: string; items?: unknown }>();
+    const name = (b.name ?? '').trim().slice(0, 60);
+    if (!name) return bad('Give the workout a name.');
+    const id = uid('ft_');
+    await c.env.DB.prepare('INSERT INTO fit_templates (id, household_id, user_id, name, items, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, u.household_id, u.id, name, JSON.stringify(cleanItems(b.items)), now(), now()).run();
+    return c.json({ id }, 201);
+  });
+  app.patch('/api/fit/templates/:id', async (c) => {
+    const u = c.get('user');
+    const b = await c.req.json<{ name?: string; items?: unknown }>();
+    const name = (b.name ?? '').trim().slice(0, 60);
+    if (!name) return bad('Give the workout a name.');
+    const r = await c.env.DB.prepare('UPDATE fit_templates SET name = ?, items = ?, updated_at = ? WHERE id = ? AND household_id = ?')
+      .bind(name, JSON.stringify(cleanItems(b.items)), now(), c.req.param('id'), u.household_id).run();
+    if (!r.meta.changes) return bad('Not found.', 404);
+    return c.json({ ok: true });
+  });
+  app.delete('/api/fit/templates/:id', async (c) => {
+    await c.env.DB.prepare('DELETE FROM fit_templates WHERE id = ? AND household_id = ?').bind(c.req.param('id'), c.get('user').household_id).run();
+    return c.json({ ok: true });
+  });
+
+  // Personal bests per exercise for one person (you, unless ?user= names your partner).
+  const whose = async (c: { req: { query: (k: string) => string | undefined }; get: (k: 'user') => User; env: Env }) => {
+    const u = c.get('user');
+    const asked = c.req.query('user');
+    if (!asked || asked === u.id) return u.id;
+    const ok = await c.env.DB.prepare('SELECT id FROM users WHERE id = ? AND household_id = ?').bind(asked, u.household_id).first();
+    return ok ? asked : u.id;
+  };
+  app.get('/api/fit/lifts', async (c) => {
+    const uidq = await whose(c);
+    const rows = (await c.env.DB.prepare(`SELECT move_id, MAX(move_name) AS move_name, MAX(track) AS track, COUNT(DISTINCT workout_id) AS sessions, MAX(date) AS last_date,
+        MAX(CASE WHEN reps IS NOT NULL THEN weight_kg END) AS best_weight,
+        MAX(CASE WHEN weight_kg IS NOT NULL AND reps IS NOT NULL THEN weight_kg * (CASE WHEN reps <= 1 THEN 1 ELSE 1 + reps / 30.0 END) END) AS best_e1rm,
+        MAX(CASE WHEN weight_kg IS NULL THEN reps END) AS best_reps, MAX(seconds) AS best_seconds, MAX(distance_m) AS best_distance
+      FROM fit_sets WHERE user_id = ? GROUP BY move_id ORDER BY last_date DESC`).bind(uidq).all()).results;
+    return c.json(rows);
+  });
+  app.get('/api/fit/lifts/:move', async (c) => {
+    const uidq = await whose(c);
+    const rows = (await c.env.DB.prepare(`SELECT workout_id, date, set_no, weight_kg, reps, seconds, distance_m, created_at FROM fit_sets
+      WHERE user_id = ? AND move_id = ? ORDER BY date DESC, created_at DESC, set_no LIMIT 600`).bind(uidq, c.req.param('move')).all<Record<string, unknown> & { workout_id: string; date: string }>()).results;
+    const sessions: { workout_id: string; date: string; sets: Record<string, unknown>[] }[] = [];
+    for (const r of rows) {
+      let s = sessions[sessions.length - 1];
+      if (!s || s.workout_id !== r.workout_id) { s = { workout_id: r.workout_id, date: r.date, sets: [] }; sessions.push(s); }
+      s.sets.push(r);
+    }
+    return c.json(sessions.slice(0, 60));
+  });
+  // Your last time on each of these moves, to show beside each set while you log.
+  app.get('/api/fit/last-sets', async (c) => {
+    const u = c.get('user');
+    const moves = (c.req.query('moves') ?? '').split(',').filter(Boolean).slice(0, 60);
+    if (!moves.length) return c.json({});
+    const rows = (await c.env.DB.prepare(`SELECT s.move_id, s.set_no, s.weight_kg, s.reps, s.seconds, s.distance_m, s.date FROM fit_sets s
+      JOIN (SELECT move_id, MAX(created_at) AS t FROM fit_sets WHERE user_id = ? AND move_id IN (${moves.map(() => '?').join(',')}) GROUP BY move_id) l
+        ON l.move_id = s.move_id AND l.t = s.created_at
+      WHERE s.user_id = ? ORDER BY s.move_id, s.set_no`).bind(u.id, ...moves, u.id).all<{ move_id: string }>()).results;
+    const out: Record<string, unknown[]> = {};
+    for (const r of rows) (out[r.move_id] ??= []).push(r);
+    return c.json(out);
+  });
+
   // Vector map data for the GPS tracker from OpenFreeMap (free, no key), drawn in the app's own colours.
   // The tile address changes when OpenFreeMap publishes new data, so it is read from their TileJSON.
   app.get('/vtiles/:z/:x/:y', async (c) => {
@@ -445,7 +576,8 @@ export function registerFitness(app: App) {
   app.post('/api/fit/workouts', async (c) => {
     const u = c.get('user');
     const b = await c.req.json<{ date?: string; minutes?: number; kind?: string; title?: string; effort?: number; together?: boolean; notes?: string;
-      route?: { distance_m?: number; moving_s?: number; elapsed_s?: number; climb_m?: number; descent_m?: number; polyline?: string; splits?: number[]; profile?: [number, number][]; started_at?: number } }>();
+      route?: { distance_m?: number; moving_s?: number; elapsed_s?: number; climb_m?: number; descent_m?: number; polyline?: string; splits?: number[]; profile?: [number, number][]; started_at?: number };
+      sets?: SetIn[] }>();
     const minutes = Math.round(Number(b.minutes));
     if (!(minutes >= 1 && minutes <= 600)) return bad('Enter between 1 and 600 minutes.');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date ?? '') ? b.date! : localDate(tz(c.env));
@@ -474,9 +606,15 @@ export function registerFitness(app: App) {
         Math.max(0, Math.round(Number(rt.climb_m) || 0)), Math.max(0, Math.round(Number(rt.descent_m) || 0)),
         rt.polyline, JSON.stringify(splits), JSON.stringify(profile), Number(rt.started_at) || null, now())));
     }
+    // Sets from your own workout, kept with your row, checked against your past bests first.
+    let pbs: Pb[] = [];
+    if (Array.isArray(b.sets) && b.sets.length) {
+      const myId = ids[people.indexOf(u.id)];
+      pbs = await saveSets(c.env, u, myId, date, b.sets);
+    }
     // Only today's sessions feed the dog, so back filling last week does not overfill the bowl.
     if (date === localDate(tz(c.env))) await feedFromWorkouts(c.env, u.household_id, people.map(() => ({ minutes, kind })));
-    return c.json({ ids, summary: await summary(c.env, u) }, 201);
+    return c.json({ ids, pbs, summary: await summary(c.env, u) }, 201);
   });
 
   // Sessions read from Health Connect on the phone (Samsung Health and others). Each one imports once.
@@ -661,11 +799,13 @@ export function registerFitness(app: App) {
     if (row.group_id) {
       await c.env.DB.batch([
         c.env.DB.prepare('DELETE FROM fit_routes WHERE workout_id IN (SELECT id FROM fit_workouts WHERE group_id = ? AND household_id = ?)').bind(row.group_id, u.household_id),
+        c.env.DB.prepare('DELETE FROM fit_sets WHERE workout_id IN (SELECT id FROM fit_workouts WHERE group_id = ? AND household_id = ?)').bind(row.group_id, u.household_id),
         c.env.DB.prepare('DELETE FROM fit_workouts WHERE group_id = ? AND household_id = ?').bind(row.group_id, u.household_id),
       ]);
     } else {
       await c.env.DB.batch([
         c.env.DB.prepare('DELETE FROM fit_routes WHERE workout_id = ?').bind(c.req.param('id')),
+        c.env.DB.prepare('DELETE FROM fit_sets WHERE workout_id = ?').bind(c.req.param('id')),
         c.env.DB.prepare('DELETE FROM fit_workouts WHERE id = ?').bind(c.req.param('id')),
       ]);
     }

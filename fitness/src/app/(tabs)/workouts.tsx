@@ -8,6 +8,7 @@ import { C, S, tint } from '../../lib/theme';
 import { Appear } from '../../components/Appear';
 import { Button, Card, Chips, Header, Icon, Loading, SectionTitle, styles as ui, tap } from '../../components/ui';
 import { TrackCard } from '../../components/TrackCard';
+import { MyWorkouts } from '../../components/MyWorkouts';
 import { LogSheet, accentOf } from '../../components/fit';
 
 const AREAS: { value: Area | 'partner'; label: string }[] = [
@@ -62,6 +63,10 @@ export default function Workouts() {
 
           <Appear index={1}>
             <TrackCard />
+          </Appear>
+
+          <Appear index={1}>
+            <MyWorkouts />
           </Appear>
 
           <Appear index={1}>

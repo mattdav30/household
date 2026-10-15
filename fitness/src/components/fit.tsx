@@ -61,7 +61,7 @@ const KIND_OPTIONS: { value: string; label: string; icon: IconName }[] = [
   { value: 'sport', label: 'Sport', icon: 'tennis' },
   { value: 'other', label: 'Other', icon: 'dots-horizontal' },
 ];
-export const kindIcon = (k: string): IconName => KIND_OPTIONS.find((o) => o.value === k)?.icon ?? (k === 'partner' ? 'account-heart' : 'run');
+export const kindIcon = (k: string): IconName => KIND_OPTIONS.find((o) => o.value === k)?.icon ?? (k === 'partner' ? 'account-heart' : k === 'gym' ? 'weight-lifter' : 'run');
 
 /** Log something done outside the app, like a walk to work or a game of tennis. */
 export function LogSheet({ visible, onClose, onSaved }: { visible: boolean; onClose: () => void; onSaved?: (minutes: number) => void }) {

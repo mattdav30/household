@@ -48,6 +48,7 @@ function Gate() {
       <Stack.Screen name="login" options={{ animation: 'fade' }} />
       <Stack.Screen name="session" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="track" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+      <Stack.Screen name="lift" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
       <Stack.Screen name="camera" options={{ animation: 'fade' }} />
     </Stack>
     {profile ? <UpdateBanner /> : null}
