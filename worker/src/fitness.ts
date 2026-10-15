@@ -602,6 +602,49 @@ export function registerFitness(app: App) {
     return c.json(await summary(c.env, u));
   });
 
+  // Every tracked walk and run, newest first. A walk together shows once, as the viewer's own row when there is one.
+  app.get('/api/fit/routes', async (c) => {
+    const u = c.get('user');
+    const before = Number(c.req.query('before')) || 9e15;
+    const rows = (await c.env.DB.prepare(`SELECT w.id, w.user_id, w.group_id, w.date, w.minutes, w.kind, w.title, w.effort, w.together, w.notes, w.created_at,
+        r.distance_m, r.moving_s, r.elapsed_s, r.climb_m, r.descent_m, r.polyline, r.started_at, r.created_at AS route_at
+      FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id
+      WHERE r.household_id = ? AND r.created_at < ? ORDER BY w.date DESC, r.created_at DESC LIMIT 200`).bind(u.household_id, before).all<Record<string, unknown> & { group_id: string | null; user_id: string }>()).results;
+    const seen = new Set<string>();
+    const mineFirst = [...rows].sort((a, b) => (a.user_id === u.id ? -1 : 0) - (b.user_id === u.id ? -1 : 0));
+    const keep = new Set<unknown>();
+    for (const r of mineFirst) { if (r.group_id) { if (seen.has(r.group_id)) continue; seen.add(r.group_id); } keep.add(r.id); }
+    return c.json({ routes: rows.filter((r) => keep.has(r.id)), more: rows.length === 200 });
+  });
+
+  // Totals, bests and weekly distance for the Routes tab, per person and per kind.
+  app.get('/api/fit/route-stats', async (c) => {
+    const u = c.get('user');
+    const today = localDate(tz(c.env));
+    const ws = weekStart(today);
+    const from = addDays(ws, -7 * 11);
+    const [totals, weeks, longest, fastest] = await c.env.DB.batch([
+      c.env.DB.prepare(`SELECT w.user_id, CASE WHEN w.kind = 'jog' THEN 'run' ELSE 'walk' END AS kind,
+          COUNT(*) AS n, SUM(r.distance_m) AS m, SUM(r.moving_s) AS s, SUM(r.climb_m) AS climb,
+          SUM(CASE WHEN w.date >= ? THEN r.distance_m ELSE 0 END) AS week_m,
+          SUM(CASE WHEN w.date >= ? THEN r.distance_m ELSE 0 END) AS month_m
+        FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id WHERE r.household_id = ? GROUP BY w.user_id, kind`).bind(ws, today.slice(0, 8) + '01', u.household_id),
+      c.env.DB.prepare(`SELECT w.user_id, w.date, r.distance_m AS m FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id
+        WHERE r.household_id = ? AND w.date >= ?`).bind(u.household_id, from),
+      c.env.DB.prepare(`SELECT w.user_id, CASE WHEN w.kind = 'jog' THEN 'run' ELSE 'walk' END AS kind, w.id, w.date, MAX(r.distance_m) AS m
+        FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id WHERE r.household_id = ? GROUP BY w.user_id, kind`).bind(u.household_id),
+      c.env.DB.prepare(`SELECT w.user_id, CASE WHEN w.kind = 'jog' THEN 'run' ELSE 'walk' END AS kind, w.id, w.date, MIN(r.moving_s * 1000.0 / r.distance_m) AS pace
+        FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id WHERE r.household_id = ? AND r.distance_m >= 1000 GROUP BY w.user_id, kind`).bind(u.household_id),
+    ]);
+    // Twelve weeks of distance, oldest first.
+    const weekly = Array.from({ length: 12 }, (_, i) => ({ start: addDays(ws, -7 * (11 - i)), by_user: {} as Record<string, number> }));
+    for (const r of weeks.results as { user_id: string; date: string; m: number }[]) {
+      const i = Math.floor(daysBetween(from, r.date) / 7);
+      if (i >= 0 && i < 12) weekly[i].by_user[r.user_id] = (weekly[i].by_user[r.user_id] ?? 0) + r.m;
+    }
+    return c.json({ totals: totals.results, weekly, longest: longest.results, fastest: fastest.results });
+  });
+
   app.get('/api/fit/routes/:id', async (c) => {
     const r = await c.env.DB.prepare('SELECT * FROM fit_routes WHERE workout_id = ? AND household_id = ?').bind(c.req.param('id'), c.get('user').household_id)
       .first<{ splits: string; profile: string } & Record<string, unknown>>();

@@ -19,7 +19,7 @@ migrations_dir = "migrations"
 # Set SKIP_OTA=1 to skip the app bundle for a quick local run.
 [build]
 command = "node scripts/build-ota.mjs"
-watch_dir = "scripts"
+watch_dir = ["scripts", "src"]
 
 [assets]
 directory = "./ota-dist"

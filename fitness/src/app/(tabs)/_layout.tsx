@@ -28,6 +28,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={tab('Home', 'home-outline', 'home')} />
       <Tabs.Screen name="workouts" options={tab('Workouts', 'dumbbell', 'dumbbell')} />
+      <Tabs.Screen name="routes" options={tab('Routes', 'map-outline', 'map')} />
       <Tabs.Screen name="dog" options={tab('Dog', 'paw-outline', 'paw')} />
       <Tabs.Screen name="progress" options={tab('Progress', 'chart-line', 'chart-line')} />
     </Tabs>
