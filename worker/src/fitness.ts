@@ -213,14 +213,18 @@ async function summary(env: Env, u: User) {
   // Two years of daily totals covers streaks and charts without loading every workout ever logged.
   const since = addDays(today, -730) > s.start_date ? addDays(today, -730) : s.start_date;
   const pr = await petRow(env, u.household_id);
-  const [members, profiles, daysQ, recentQ, kindsQ, treatsQ] = await env.DB.batch([
+  const ws0 = weekStart(today);
+  const [members, profiles, daysQ, recentQ, kindsQ, treatsQ, kmQ] = await env.DB.batch([
     env.DB.prepare('SELECT id, name, color FROM users WHERE household_id = ? ORDER BY created_at').bind(u.household_id),
     env.DB.prepare('SELECT p.* FROM fit_profiles p JOIN users u ON u.id = p.user_id WHERE u.household_id = ?').bind(u.household_id),
     env.DB.prepare('SELECT user_id, date, SUM(minutes) AS m FROM fit_workouts WHERE household_id = ? AND date >= ? GROUP BY user_id, date').bind(u.household_id, since),
-    env.DB.prepare('SELECT * FROM fit_workouts WHERE household_id = ? ORDER BY date DESC, created_at DESC LIMIT 12').bind(u.household_id),
+    env.DB.prepare(`SELECT w.*, r.distance_m FROM fit_workouts w LEFT JOIN fit_routes r ON r.workout_id = w.id
+      WHERE w.household_id = ? ORDER BY w.date DESC, w.created_at DESC LIMIT 12`).bind(u.household_id),
     env.DB.prepare(`SELECT user_id, SUM(together) AS together, SUM(CASE WHEN kind IN ('home', 'partner', 'stairs', 'jog') THEN 1 ELSE 0 END) AS workouts
       FROM fit_workouts WHERE household_id = ? GROUP BY user_id`).bind(u.household_id),
     env.DB.prepare(`SELECT COALESCE(SUM(MIN(minutes / 10, ${TREATS_PER_SESSION})), 0) AS t FROM fit_workouts WHERE household_id = ?`).bind(u.household_id),
+    env.DB.prepare(`SELECT w.user_id, SUM(r.distance_m) AS m FROM fit_routes r JOIN fit_workouts w ON w.id = r.workout_id
+      WHERE w.household_id = ? AND w.date >= ? GROUP BY w.user_id`).bind(u.household_id, ws0),
   ]);
   const treatsEarned = (treatsQ.results[0] as { t: number }).t;
   const people = members.results as { id: string; name: string; color: string }[];
@@ -321,7 +325,7 @@ async function summary(env: Env, u: User) {
     members: memberRows,
     steps: STEPS,
     countdown: { label: s.countdown_label, date: s.wedding_date, days: daysBetween(today, s.wedding_date) },
-    week: { start: ws, by_user: weekBy, total: Object.values(weekBy).reduce((a, b) => a + b, 0), days: weekDays },
+    week: { start: ws, by_user: weekBy, km_by_user: Object.fromEntries((kmQ.results as { user_id: string; m: number }[]).map((r) => [r.user_id, Math.round(r.m / 100) / 10])), total: Object.values(weekBy).reduce((a, b) => a + b, 0), days: weekDays },
     weeks,
     streaks,
     pet: {
@@ -388,14 +392,16 @@ export function registerFitness(app: App) {
   app.get('/api/fit/workouts', async (c) => {
     const u = c.get('user');
     const before = c.req.query('before') ?? '9999-12-31';
-    const rows = await c.env.DB.prepare('SELECT * FROM fit_workouts WHERE household_id = ? AND date < ? ORDER BY date DESC, created_at DESC LIMIT 60')
+    const rows = await c.env.DB.prepare(`SELECT w.*, r.distance_m FROM fit_workouts w LEFT JOIN fit_routes r ON r.workout_id = w.id
+      WHERE w.household_id = ? AND w.date < ? ORDER BY w.date DESC, w.created_at DESC LIMIT 60`)
       .bind(u.household_id, before).all();
     return c.json(rows.results);
   });
 
   app.post('/api/fit/workouts', async (c) => {
     const u = c.get('user');
-    const b = await c.req.json<{ date?: string; minutes?: number; kind?: string; title?: string; effort?: number; together?: boolean; notes?: string }>();
+    const b = await c.req.json<{ date?: string; minutes?: number; kind?: string; title?: string; effort?: number; together?: boolean; notes?: string;
+      route?: { distance_m?: number; moving_s?: number; climb_m?: number; polyline?: string; splits?: number[]; started_at?: number } }>();
     const minutes = Math.round(Number(b.minutes));
     if (!(minutes >= 1 && minutes <= 600)) return bad('Enter between 1 and 600 minutes.');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date ?? '') ? b.date! : localDate(tz(c.env));
@@ -411,6 +417,15 @@ export function registerFitness(app: App) {
     await c.env.DB.batch(people.map((pid, i) => c.env.DB.prepare(
       'INSERT INTO fit_workouts (id, household_id, user_id, group_id, date, minutes, kind, title, effort, together, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ).bind(ids[i], u.household_id, pid, group, date, minutes, kind, title, effort, people.length > 1 ? 1 : 0, notes, now())));
+    // A GPS route from the tracker, kept with each person's row.
+    const rt = b.route;
+    if (rt && typeof rt.polyline === 'string' && rt.polyline.length <= 200000 && Number(rt.distance_m) >= 0) {
+      const splits = Array.isArray(rt.splits) ? rt.splits.filter((x) => typeof x === 'number' && x > 0).slice(0, 200) : [];
+      await c.env.DB.batch(ids.map((id) => c.env.DB.prepare(
+        'INSERT OR REPLACE INTO fit_routes (workout_id, household_id, distance_m, moving_s, climb_m, polyline, splits, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).bind(id, u.household_id, Math.round(Number(rt.distance_m)), Math.round(Number(rt.moving_s) || minutes * 60), Math.max(0, Math.round(Number(rt.climb_m) || 0)),
+        rt.polyline, JSON.stringify(splits), Number(rt.started_at) || null, now())));
+    }
     // Only today's sessions feed the dog, so back filling last week does not overfill the bowl.
     if (date === localDate(tz(c.env))) await feedFromWorkouts(c.env, u.household_id, people.map(() => ({ minutes, kind })));
     return c.json({ ids, summary: await summary(c.env, u) }, 201);
@@ -539,14 +554,30 @@ export function registerFitness(app: App) {
     return c.json(await summary(c.env, u));
   });
 
+  app.get('/api/fit/routes/:id', async (c) => {
+    const r = await c.env.DB.prepare('SELECT * FROM fit_routes WHERE workout_id = ? AND household_id = ?').bind(c.req.param('id'), c.get('user').household_id)
+      .first<{ splits: string } & Record<string, unknown>>();
+    if (!r) return bad('No route for this session.', 404);
+    return c.json({ ...r, splits: JSON.parse(r.splits || '[]') });
+  });
+
   // Deleting one row of a shared session removes both people's rows.
   app.delete('/api/fit/workouts/:id', async (c) => {
     const u = c.get('user');
     const row = await c.env.DB.prepare('SELECT group_id FROM fit_workouts WHERE id = ? AND household_id = ?')
       .bind(c.req.param('id'), u.household_id).first<{ group_id: string | null }>();
     if (!row) return bad('Not found.', 404);
-    if (row.group_id) await c.env.DB.prepare('DELETE FROM fit_workouts WHERE group_id = ? AND household_id = ?').bind(row.group_id, u.household_id).run();
-    else await c.env.DB.prepare('DELETE FROM fit_workouts WHERE id = ?').bind(c.req.param('id')).run();
+    if (row.group_id) {
+      await c.env.DB.batch([
+        c.env.DB.prepare('DELETE FROM fit_routes WHERE workout_id IN (SELECT id FROM fit_workouts WHERE group_id = ? AND household_id = ?)').bind(row.group_id, u.household_id),
+        c.env.DB.prepare('DELETE FROM fit_workouts WHERE group_id = ? AND household_id = ?').bind(row.group_id, u.household_id),
+      ]);
+    } else {
+      await c.env.DB.batch([
+        c.env.DB.prepare('DELETE FROM fit_routes WHERE workout_id = ?').bind(c.req.param('id')),
+        c.env.DB.prepare('DELETE FROM fit_workouts WHERE id = ?').bind(c.req.param('id')),
+      ]);
+    }
     return c.json({ ok: true });
   });
 

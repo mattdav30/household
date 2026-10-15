@@ -12,6 +12,7 @@ import { Button, Card, Chips, ErrorBar, Field, Header, HeaderButton, Icon, IconB
 import { Legend, LogSheet, WeekBars, WorkoutRow, WorkoutSheet, accentOf } from '../../components/fit';
 import { PET_COLORS, careOf, needsLine, petLine } from '../../components/Pet';
 import { Pet3D } from '../../components/pet3d/Pet3D';
+import { TrackCard } from '../../components/TrackCard';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -144,6 +145,7 @@ export default function Home() {
               </Pressable>
               {swapped ? <Text style={{ color: C.gold, fontSize: 13 }}>{swapped}</Text> : null}
               <Button title="Choose a different workout" kind="soft" icon="view-grid-outline" onPress={() => router.push('/workouts')} />
+              <TrackCard compact />
               <View style={{ height: 1, backgroundColor: C.line }} />
               <Text style={ui.label}>Already moved? Log a walk</Text>
               <View style={{ flexDirection: 'row', gap: S.sm }}>

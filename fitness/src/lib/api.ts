@@ -66,7 +66,10 @@ export type Profile = {
 export type Workout = {
   id: string; user_id: string; group_id: string | null; date: string; minutes: number; kind: string; title: string;
   effort: number; together: number; notes: string | null; created_at: number;
+  /** Set when the session was tracked with GPS. */
+  distance_m?: number | null;
 };
+export type Route = { workout_id: string; distance_m: number; moving_s: number; climb_m: number; polyline: string; splits: number[]; started_at: number | null };
 export type Streak = { days: number; best: number; done_today: boolean; shields_left: number };
 export type FitMember = {
   id: string; name: string; color: string; level: number; reminder_hour: number | null; evening_nudge: boolean;
@@ -100,7 +103,7 @@ export type Summary = {
   members: FitMember[];
   steps: LadderStep[];
   countdown: { label: string; date: string; days: number };
-  week: { start: string; by_user: Record<string, number>; total: number; days: { date: string; by_user: Record<string, number> }[] };
+  week: { start: string; by_user: Record<string, number>; km_by_user?: Record<string, number>; total: number; days: { date: string; by_user: Record<string, number> }[] };
   weeks: { start: string; by_user: Record<string, number> }[];
   streaks: Record<string, Streak>;
   pet: Pet;

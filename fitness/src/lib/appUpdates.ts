@@ -66,7 +66,7 @@ export const installRelease = (r: Release) => Linking.openURL(r.url);
 export async function updateDetails(): Promise<string> {
   if (Platform.OS === 'web' || !Updates.isEnabled) return 'Updates are off in this build.';
   const parts = [
-    `Channel ${Updates.channel ?? 'none'}`,
+    `Runtime ${Updates.runtimeVersion ?? '?'}`,
     Updates.isEmbeddedLaunch ? 'install file code' : `update ${(Updates.updateId ?? '').slice(0, 8)}`,
     Updates.createdAt ? `made ${Updates.createdAt.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}` : '',
   ];

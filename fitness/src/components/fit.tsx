@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, Switch, Text, View, useWindowDimensions } from 'react-native';
 import { C, S, tint } from '../lib/theme';
-import { api, changes, type Summary, type Workout } from '../lib/api';
+import { api, changes, type Route, type Summary, type Workout } from '../lib/api';
+import { decodeTrack, fmtKm, fmtPace, fmtTime } from '../lib/gps';
+import { RouteMap, Splits } from './RouteMap';
 import { today as todayIso, friendly } from '../lib/dates';
 import { useStore } from '../lib/store';
 import { Button, Chips, Field, Icon, Sheet, styles as ui, tap, DateField, type IconName } from './ui';
@@ -165,6 +167,15 @@ export function WeeksChart({ summary, height = 110 }: { summary: Summary; height
 export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; onClose: () => void }) {
   const { refresh, name } = useStore();
   const [busy, setBusy] = useState(false);
+  const [route, setRoute] = useState<Route | null>(null);
+  const { width } = useWindowDimensions();
+  useEffect(() => {
+    setRoute(null);
+    if (!workout?.distance_m) return;
+    let live = true;
+    api<Route>(`/api/fit/routes/${workout.id}`).then((r) => { if (live) setRoute(r); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [workout]);
   const remove = async () => {
     if (!workout) return;
     setBusy(true);
@@ -184,8 +195,15 @@ export function WorkoutSheet({ workout, onClose }: { workout: Workout | null; on
         <View style={{ gap: S.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.md }}>
             <Icon name={kindIcon(workout.kind)} size={28} color={C.accent} />
-            <Text style={[ui.h2, ui.num]}>{workout.minutes} min</Text>
+            <Text style={[ui.h2, ui.num]}>{workout.minutes} min{workout.distance_m ? ` · ${fmtKm(workout.distance_m)} km` : ''}</Text>
           </View>
+          {route ? (
+            <View style={{ gap: S.sm }}>
+              <RouteMap segments={decodeTrack(route.polyline)} width={width - S.lg * 2 - 2} height={220} />
+              <Text style={{ color: C.sub }}>Pace {fmtPace(route.distance_m > 50 ? route.moving_s / (route.distance_m / 1000) : null)} /km · moving {fmtTime(route.moving_s * 1000)}{route.climb_m ? ` · climbed ${route.climb_m} m` : ''}</Text>
+              <Splits splits={route.splits} />
+            </View>
+          ) : null}
           <Text style={{ color: C.sub }}>{name(workout.user_id)} · {friendly(workout.date)}{workout.together ? ' · together' : ''}{(workout as Workout & { source?: string | null }).source ? ' · from Samsung Health' : ''}</Text>
           <Text style={{ color: C.sub }}>Effort: {['', 'Easy', 'Solid', 'Tough'][workout.effort] ?? 'Solid'}</Text>
           <Button title="Delete session" kind="danger" icon="trash-can-outline" onPress={confirm} busy={busy} />
@@ -208,8 +226,8 @@ export function WorkoutRow({ w, first, onPress }: { w: Workout; first?: boolean;
         <Text style={ui.rowTitle} numberOfLines={1}>{w.title}</Text>
         <Text style={ui.rowSub}>{name(w.user_id)} · {friendly(w.date)}{w.together ? ' · together' : ''}</Text>
       </View>
-      <Text style={[{ color: C.ink, fontWeight: '700' }, ui.num]}>{w.minutes} min</Text>
-      <Icon name="chevron-right" size={18} color={C.faint} />
+      <Text style={[{ color: C.ink, fontWeight: '700' }, ui.num]}>{w.distance_m ? `${fmtKm(w.distance_m)} km` : `${w.minutes} min`}</Text>
+      <Icon name={w.distance_m ? 'map-marker-path' : 'chevron-right'} size={18} color={C.faint} />
     </Pressable>
   );
 }
