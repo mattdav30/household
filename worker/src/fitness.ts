@@ -507,6 +507,23 @@ export function registerFitness(app: App) {
     return out;
   });
 
+  // Exercise photos and instructions from the public domain Free Exercise DB on GitHub, cached at the edge for a month.
+  app.get('/exdb/:path{.+}', async (c) => {
+    const path = c.req.param('path');
+    if (!/^[A-Za-z0-9_\-]+(\/[01]\.jpg|\.json)$/.test(path)) return bad('Not found.', 404);
+    const cache = caches.default;
+    const key = new Request(`https://exdb.tandem.local/${path}`);
+    const hit = await cache.match(key);
+    if (hit) return hit;
+    const res = await fetch(`https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/${path}`);
+    if (!res.ok) return new Response(null, { status: res.status === 404 ? 404 : 502 });
+    const out = new Response(await res.arrayBuffer(), {
+      headers: { 'content-type': path.endsWith('.json') ? 'application/json' : 'image/jpeg', 'cache-control': 'public, max-age=2592000', 'access-control-allow-origin': '*' },
+    });
+    c.executionCtx.waitUntil(cache.put(key, out.clone()));
+    return out;
+  });
+
   // Map tiles for the GPS tracker, from OpenStreetMap, cached at Cloudflare's edge for a week so we
   // ask OpenStreetMap for each tile once at most, as their tile policy asks.
   app.get('/tiles/:z/:x/:y', async (c) => {

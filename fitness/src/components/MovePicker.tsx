@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, S, tint } from '../lib/theme';
 import { customMove, GROUPS, searchMoves, type Group, type Move, type Track } from '../lib/lifts';
 import { Button, Icon, styles as ui, tap } from './ui';
+import { HowToButton, hasDemo } from './MoveDemo';
 
 const TRACK_LABEL: Record<Track, string> = { weight: 'Weight and reps', reps: 'Reps', time: 'Time', cardio: 'Minutes and distance' };
 
@@ -76,6 +77,7 @@ export function MovePicker({ visible, onClose, onPick, recent = [] }: { visible:
                   <Text style={[ui.rowTitle, on && { color: C.accent }]}>{m.name}</Text>
                   <Text style={ui.rowSub}>{m.group} · {m.equip}{m.track === 'time' ? ' · timed' : m.track === 'cardio' ? ' · cardio' : ''}</Text>
                 </View>
+                {hasDemo(m.id) || m.home ? <HowToButton moveId={m.id} name={m.name} compact /> : null}
                 <Icon name={on ? 'check-circle' : 'plus-circle-outline'} size={26} color={on ? C.accent : C.faint} />
               </Pressable>
             );

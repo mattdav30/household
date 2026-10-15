@@ -8,6 +8,7 @@ import { C, S } from '../lib/theme';
 import type { Move } from '../lib/lifts';
 import type { PlanItem, Template } from '../lib/strength';
 import { MovePicker } from '../components/MovePicker';
+import { HowToButton } from '../components/MoveDemo';
 import { Button, Field, Icon, styles as ui, tap } from '../components/ui';
 
 export default function TemplateScreen() {
@@ -76,6 +77,7 @@ export default function TemplateScreen() {
               <View key={`${it.move_id}${i}`} style={[ui.card, { gap: S.sm }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.sm }}>
                   <Text style={[ui.rowTitle, { flex: 1 }]} numberOfLines={2}>{it.move_name}</Text>
+                  <HowToButton moveId={it.move_id} name={it.move_name} compact />
                   <IconBtn icon="arrow-up" label="Move up" onPress={() => move(i, -1)} />
                   <IconBtn icon="arrow-down" label="Move down" onPress={() => move(i, 1)} />
                   <IconBtn icon="trash-can-outline" label="Remove" onPress={() => setItems((xs) => xs.filter((_, j) => j !== i))} />

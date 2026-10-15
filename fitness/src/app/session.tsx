@@ -15,6 +15,7 @@ import { C, S, tint } from '../lib/theme';
 import { money } from '../lib/dates';
 import { reduceMotion } from '../lib/motion';
 import { Button, Chips, Icon, IconBadge, styles as ui, tap } from '../components/ui';
+import { HowToButton, MoveDemo, hasDemo } from '../components/MoveDemo';
 import { accentOf } from '../components/fit';
 
 type Phase = 'preview' | 'run' | 'finish' | 'done';
@@ -118,6 +119,7 @@ function MoveCard({ id }: { id: string }) {
       </View>
       {open ? (
         <>
+          {hasDemo(`h-${e.id}`) ? <View style={{ alignItems: 'center' }}><MoveDemo moveId={`h-${e.id}`} width={240} height={165} /></View> : null}
           <Text style={{ color: C.sub, lineHeight: 20 }}>{e.how}</Text>
           {e.easier ? <Text style={{ color: C.green, fontSize: 13 }}>Easier: {e.easier}</Text> : null}
           {e.harder ? <Text style={{ color: C.gold, fontSize: 13 }}>Harder: {e.harder}</Text> : null}
@@ -228,8 +230,11 @@ function Player({ session, onExit }: { session: Session; onExit: (seconds: numbe
 
   const col = stepColor(step);
   const frac = step.seconds ? 1 - left / (step.seconds * 1000) : 1;
-  const size = 260;
-  const rad = 118;
+  // With a picture of the move on screen, the timer ring shrinks to make room.
+  const demoId = ex && step.kind !== 'rest' ? `h-${ex.id}` : next?.exId && step.kind === 'rest' ? `h-${next.exId}` : null;
+  const showDemo = !!demoId && hasDemo(demoId);
+  const size = showDemo ? 170 : 260;
+  const rad = size / 2 - 12;
   const circ = 2 * Math.PI * rad;
   const overall = (doneBefore + step.seconds * frac) / total;
 
@@ -253,6 +258,12 @@ function Player({ session, onExit }: { session: Session; onExit: (seconds: numbe
           {step.kind === 'rest' ? 'REST' : step.kind === 'warm' ? 'WARM UP' : step.kind === 'cool' ? 'COOL DOWN' : 'GO'}
         </Text>
         <Text style={[ui.h1, { textAlign: 'center' }]} accessibilityLiveRegion="polite">{step.name}</Text>
+        {showDemo ? (
+          <View style={{ alignItems: 'center', gap: 4 }}>
+            <MoveDemo moveId={demoId!} width={230} height={160} />
+            {step.kind === 'rest' ? <Text style={{ color: C.sub, fontSize: 12 }}>Up next</Text> : <HowToButton moveId={demoId!} name={ex?.name} />}
+          </View>
+        ) : null}
         <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
           <Svg width={size} height={size} style={{ position: 'absolute' }}>
             <Circle cx={size / 2} cy={size / 2} r={rad} stroke={C.raised} strokeWidth={14} fill="none" />

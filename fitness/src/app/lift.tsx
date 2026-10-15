@@ -17,6 +17,7 @@ import {
   type LastSet, type LiftSession, type LogSet, type Pb, type Template,
 } from '../lib/strength';
 import { MovePicker } from '../components/MovePicker';
+import { HowToButton } from '../components/MoveDemo';
 import { Button, Icon, IconBadge, styles as ui, tap } from '../components/ui';
 
 const COLS: Record<Track, { a?: string; b?: string }> = {
@@ -169,6 +170,7 @@ export default function LiftScreen() {
                   <Text style={[ui.rowTitle, { color: C.accent }]}>{e.move.name}</Text>
                   <Text style={ui.rowSub}>{e.move.equip} · {e.move.group}</Text>
                 </View>
+                <HowToButton moveId={e.move.id} name={e.move.name} compact />
                 <Pressable onPress={() => exerciseMenu(ei)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Options for ${e.move.name}`}>
                   <Icon name="dots-horizontal" size={22} color={C.sub} />
                 </Pressable>
