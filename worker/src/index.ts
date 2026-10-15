@@ -6,7 +6,8 @@ import {
 import { expandEvents } from './recur';
 import { holidayEvents } from './holidays';
 import { registerFitness } from './fitness';
-import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, normIngredients, sameThing, type Ingredient } from './food';
+import { byReadiness, coverage, fromMealDb, importFromUrl, isBasic, mealDb, nameKey, normIngredients, sameThing, type Ingredient } from './food';
+import { library, libraryRecipe, LIB_PREFIX, searchLibrary } from './library';
 
 type Env = { DB: D1Database; TZ_OFFSET_MIN: string; ASSETS: Fetcher };
 type User = { id: string; household_id: string; email: string; name: string; color: string; notify_hour?: number | null };
@@ -231,35 +232,69 @@ app.post('/api/events/:id/skip', async (c) => {
 
 // ---------- Online recipes ----------
 
+const AUSSIE = 'Aussie favourites';
+const NO_CATS = new Set(['Dessert']);
+type Hit = { id: string; title: string; image_url: string | null; category: string | null };
+
+/** Ids of every dessert in the online library, so searches and ideas can leave them out. */
+async function dessertIds(ctx: { waitUntil(p: Promise<unknown>): void }): Promise<Set<string>> {
+  try {
+    const data = await mealDb('/filter.php?c=Dessert', ctx);
+    return new Set(((data.meals ?? []) as { idMeal: string }[]).map((m) => m.idMeal));
+  } catch { return new Set(); }
+}
+
+const libHit = (r: (typeof library)[number]): Hit => ({ id: r.id, title: r.title, image_url: r.image_url, category: r.category });
+
+function shuffle<T>(a: T[]): T[] {
+  const out = [...a];
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+  return out;
+}
+
 app.get('/api/discover/categories', async (c) => {
-  const data = await mealDb('/categories.php', c.executionCtx);
-  return c.json((data.categories ?? []).map((x: any) => ({ name: x.strCategory, image_url: x.strCategoryThumb })));
+  const data = await mealDb('/categories.php', c.executionCtx).catch(() => ({ categories: [] }));
+  const online = (data.categories ?? []).filter((x: any) => !NO_CATS.has(x.strCategory)).map((x: any) => ({ name: x.strCategory, image_url: x.strCategoryThumb }));
+  return c.json([{ name: AUSSIE, image_url: null }, ...online]);
 });
 
 app.get('/api/discover/search', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
   const cat = (c.req.query('c') ?? '').trim();
+  const ctx = c.executionCtx;
   try {
+    if (cat === AUSSIE) {
+      const area = await mealDb('/filter.php?a=Australian', ctx).catch(() => ({ meals: null }));
+      const sweets = await dessertIds(ctx);
+      const extra: Hit[] = ((area.meals ?? []) as any[]).filter((m) => !sweets.has(m.idMeal))
+        .map((m) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: 'Australian' }));
+      return c.json([...library.map(libHit), ...extra]);
+    }
     if (cat) {
-      const data = await mealDb('/filter.php?c=' + encodeURIComponent(cat), c.executionCtx);
-      return c.json((data.meals ?? []).map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: cat })));
+      if (NO_CATS.has(cat)) return c.json([]);
+      const data = await mealDb('/filter.php?c=' + encodeURIComponent(cat), ctx);
+      const lib = library.filter((r) => r.category === cat).map(libHit);
+      return c.json([...lib, ...(data.meals ?? []).map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: cat }))]);
     }
     if (!q) {
-      // A mixed starter shelf: a few random picks.
-      const picks = await Promise.all(Array.from({ length: 8 }, () => fetch('https://www.themealdb.com/api/json/v1/1/random.php').then((r) => r.json() as Promise<any>).catch(() => null)));
+      // A starter shelf: Aussie dinners first, mixed with a few random online picks.
+      const picks = await Promise.all(Array.from({ length: 6 }, () => fetch('https://www.themealdb.com/api/json/v1/1/random.php').then((r) => r.json() as Promise<any>).catch(() => null)));
       const seen = new Set<string>();
-      return c.json(picks.flatMap((p) => p?.meals ?? []).filter((m: any) => !seen.has(m.idMeal) && seen.add(m.idMeal))
-        .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory })));
+      const online: Hit[] = picks.flatMap((p) => p?.meals ?? []).filter((m: any) => !NO_CATS.has(m.strCategory) && !seen.has(m.idMeal) && seen.add(m.idMeal))
+        .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory }));
+      return c.json([...shuffle(library).slice(0, 14).map(libHit), ...online]);
     }
-    // Search by name, then by main ingredient, and merge.
-    const [byName, byIng] = await Promise.all([
-      mealDb('/search.php?s=' + encodeURIComponent(q), c.executionCtx),
-      mealDb('/filter.php?i=' + encodeURIComponent(q.replace(/\s+/g, '_')), c.executionCtx).catch(() => ({ meals: null })),
+    // Search our library, then the online library by name and by main ingredient, and merge.
+    const [byName, byIng, sweets] = await Promise.all([
+      mealDb('/search.php?s=' + encodeURIComponent(q), ctx).catch(() => ({ meals: null })),
+      mealDb('/filter.php?i=' + encodeURIComponent(q.replace(/\s+/g, '_')), ctx).catch(() => ({ meals: null })),
+      dessertIds(ctx),
     ]);
     const seen = new Set<string>();
-    const out = [...(byName.meals ?? []), ...(byIng.meals ?? [])].filter((m: any) => !seen.has(m.idMeal) && seen.add(m.idMeal))
+    const online = [...(byName.meals ?? []), ...(byIng.meals ?? [])]
+      .filter((m: any) => !NO_CATS.has(m.strCategory) && !sweets.has(m.idMeal) && !seen.has(m.idMeal) && seen.add(m.idMeal))
       .map((m: any) => ({ id: 'mealdb:' + m.idMeal, title: m.strMeal, image_url: m.strMealThumb, category: m.strCategory ?? null }));
-    return c.json(out);
+    return c.json([...searchLibrary(q).map(libHit), ...online]);
   } catch (e) {
     return bad((e as Error).message, 502);
   }
@@ -267,6 +302,10 @@ app.get('/api/discover/search', async (c) => {
 
 app.get('/api/discover/meal/:id', async (c) => {
   const id = c.req.param('id').replace(/^mealdb:/, '');
+  if (id.startsWith(LIB_PREFIX)) {
+    const r = libraryRecipe(id);
+    return r ? c.json(r) : bad('Recipe not found.', 404);
+  }
   const data = await mealDb('/lookup.php?i=' + encodeURIComponent(id), c.executionCtx);
   const m = data.meals?.[0];
   if (!m) return bad('Recipe not found.', 404);
@@ -430,6 +469,11 @@ app.get('/api/recipes/coverage', async (c) => {
   return c.json(Object.fromEntries(recipes.map((r) => [r.id, coverage(normIngredients(r.ingredients), names, listed)])));
 });
 
+/** Kitchen staples nearly every recipe uses. Having them says little about what to cook. */
+const STAPLES = ['oil', 'olive oil', 'vegetable oil', 'garlic', 'garlic clove', 'onion', 'brown onion', 'butter', 'plain flour', 'flour',
+  'sugar', 'brown sugar', 'cornflour', 'soy sauce', 'tomato sauce', 'salt', 'pepper'];
+const isStaple = (name: string) => STAPLES.includes(nameKey(name).join(' '));
+
 // Meal ideas ranked by what we already have: saved recipes first, then online recipes built around what is in the fridge.
 app.get('/api/suggest', async (c) => {
   const u = c.get('user');
@@ -442,33 +486,56 @@ app.get('/api/suggest', async (c) => {
     .filter((r) => r.total > 0)
     .sort(byReadiness);
 
+  // Ideas from our Aussie library and the online library, kept when they use at least one real
+  // ingredient we have (oil, garlic, onion and the like are in every recipe, so they do not count).
+  const savedMealIds = new Set(recipes.filter((r) => r.source === 'mealdb').map((r) => 'mealdb:' + r.source_id));
+  const keyUses = (items: Ingredient[]) => {
+    const used = new Set<string>();
+    for (const i of items) {
+      if (isBasic(i.name) || isStaple(i.name)) continue;
+      const p = pantry.find((x) => sameThing(x.name, i.name));
+      if (p) used.add(p.name);
+    }
+    return [...used];
+  };
+  type Idea = { id: string; title: string; image_url: string | null; category: string | null; uses: string[] } & ReturnType<typeof coverage>;
+  const ideas = new Map<string, Idea>();
+  const consider = (r: { id: string; title: string; image_url: string | null; category: string | null; ingredients: Ingredient[] }) => {
+    if (savedMealIds.has(r.id) || ideas.has(r.id)) return;
+    const uses = keyUses(r.ingredients);
+    if (!uses.length) return;
+    ideas.set(r.id, { id: r.id, title: r.title, image_url: r.image_url, category: r.category, uses, ...coverage(r.ingredients, names, listed) });
+  };
+  library.forEach(consider);
+
   // Search the online library by the fresh things we have, fridge and freezer first.
   const order = ['Fridge', 'Freezer', 'Pantry'];
-  const seeds = [...pantry].filter((p) => p.location !== 'Household')
+  const seeds = [...pantry].filter((p) => p.location !== 'Household' && !isStaple(p.name))
     .sort((a, b) => order.indexOf(a.location) - order.indexOf(b.location))
-    .map((p) => p.name).slice(0, 5);
-  const savedMealIds = new Set(recipes.filter((r) => r.source === 'mealdb').map((r) => 'mealdb:' + r.source_id));
-  const hits = new Map<string, { n: number; seed: string[] }>();
+    .map((p) => p.name).slice(0, 6);
+  const sweets = await dessertIds(c.executionCtx);
+  const hits = new Map<string, number>();
   await Promise.all(seeds.map(async (seed) => {
     try {
       const data = await mealDb('/filter.php?i=' + encodeURIComponent(seed.toLowerCase().trim().replace(/\s+/g, '_')), c.executionCtx);
       for (const m of (data.meals ?? []) as { idMeal: string }[]) {
-        const h = hits.get(m.idMeal) ?? { n: 0, seed: [] };
-        h.n++; h.seed.push(seed); hits.set(m.idMeal, h);
+        if (!sweets.has(m.idMeal)) hits.set(m.idMeal, (hits.get(m.idMeal) ?? 0) + 1);
       }
     } catch { /* one failed search does not stop the rest */ }
   }));
   const candidates = [...hits.entries()].filter(([id]) => !savedMealIds.has('mealdb:' + id))
-    .sort((a, b) => b[1].n - a[1].n).slice(0, 12);
-  const online = (await Promise.all(candidates.map(async ([id, h]) => {
+    .sort((a, b) => b[1] - a[1]).slice(0, 12);
+  await Promise.all(candidates.map(async ([id]) => {
     try {
       const data = await mealDb('/lookup.php?i=' + id, c.executionCtx);
       const m = data.meals?.[0];
-      if (!m) return null;
-      const r = fromMealDb(m);
-      return { id: r.id, title: r.title, image_url: r.image_url, category: r.category, uses: h.seed, ...coverage(r.ingredients, names, listed) };
-    } catch { return null; }
-  }))).filter((x): x is NonNullable<typeof x> => !!x).sort(byReadiness);
+      if (m && !NO_CATS.has(m.strCategory)) consider(fromMealDb(m));
+    } catch { /* skip */ }
+  }));
+
+  const online = [...ideas.values()]
+    .sort((a, b) => byReadiness(a, b) || b.uses.length - a.uses.length)
+    .slice(0, 40);
 
   return c.json({ saved, online, pantry_count: pantry.length });
 });
