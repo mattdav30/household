@@ -1,10 +1,13 @@
-// A map of a walk or run: map tiles under the route line, fitted to the route.
-// Tiles are OpenStreetMap's, passed through our worker, which caches them, so no map account or key is needed.
+// A map of a walk or run, drawn in the app's own colours: streets, parks, water and buildings from
+// OpenStreetMap (OpenFreeMap vector tiles through our worker), with the route in blue on top.
+// If the street data cannot load, plain picture tiles fill in.
+import { useEffect, useState } from 'react';
 import { Image, Text, View } from 'react-native';
-import Svg, { Circle, Polyline } from 'react-native-svg';
+import Svg, { Circle, G, Path, Polyline } from 'react-native-svg';
 import { C, MODE, S, tint } from '../lib/theme';
 import { fmtPace } from '../lib/gps';
 import { API_URL } from '../lib/api';
+import { DATA_MAX_ZOOM, loadTile, tileNow, type TilePaths } from '../lib/vectorTiles';
 import { styles as ui } from './ui';
 
 type LL = { lat: number; lng: number };
@@ -15,12 +18,18 @@ const worldY = (lat: number, z: number) => {
   return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * TILE * 2 ** z;
 };
 
+/** The route colour: a clear blue, with a soft glow under it. */
+export const ROUTE_BLUE = '#2F7BFF';
+const MAP = MODE === 'dark'
+  ? { land: '#191B29', green: '#1C2A26', water: '#1C2E4A', building: '#22253A', casing: '#121320', major: '#4A4F72', mid: '#3B3F5C', minor: '#2E3148', path: '#3A3E58', text: '#9a9aa6' }
+  : { land: '#F1F0EC', green: '#D7EAD2', water: '#B7D5F2', building: '#E3E1DC', casing: '#D6D3CC', major: '#FFFFFF', mid: '#FFFFFF', minor: '#FFFFFF', path: '#C9C5BC', text: '#666' };
+
 /** Draws the route. Each inner array is one stretch between pauses. `here` marks where you are now. */
 export function RouteMap({ segments, width, height, here, radius = 16 }: { segments: LL[][]; width: number; height: number; here?: LL | null; radius?: number }) {
   const all = segments.flat().concat(here ? [here] : []);
   if (!all.length) {
     return (
-      <View style={{ width, height, borderRadius: radius, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width, height, borderRadius: radius, backgroundColor: MAP.land, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: C.sub }}>Waiting for GPS…</Text>
       </View>
     );
@@ -36,41 +45,88 @@ export function RouteMap({ segments, width, height, here, radius = 16 }: { segme
   const cy = (worldY(box.s, z) + worldY(box.n, z)) / 2;
   const ox = cx - width / 2;
   const oy = cy - height / 2;
-  const n = 2 ** z;
-  const tiles: { x: number; y: number; left: number; top: number }[] = [];
-  for (let tx = Math.floor(ox / TILE); tx <= Math.floor((ox + width) / TILE); tx++) {
-    for (let ty = Math.floor(oy / TILE); ty <= Math.floor((oy + height) / TILE); ty++) {
-      if (ty < 0 || ty >= n) continue;
-      tiles.push({ x: ((tx % n) + n) % n, y: ty, left: tx * TILE - ox, top: ty * TILE - oy });
-    }
-  }
   const px = (p: LL) => `${(worldX(p.lng, z) - ox).toFixed(1)},${(worldY(p.lat, z) - oy).toFixed(1)}`;
   const first = segments.find((s) => s.length)?.[0];
   const lastSeg = [...segments].reverse().find((s) => s.length);
   const last = lastSeg?.[lastSeg.length - 1];
   const at = (p: LL) => ({ cx: worldX(p.lng, z) - ox, cy: worldY(p.lat, z) - oy });
+  const lines = segments.filter((s) => s.length > 1).map((s) => s.map(px).join(' '));
 
   return (
-    <View style={{ width, height, borderRadius: radius, overflow: 'hidden', backgroundColor: MODE === 'dark' ? '#1b1d24' : '#e8e6df' }}>
-      {tiles.map((t) => (
-        <Image key={`${z}/${t.x}/${t.y}/${t.left}`} source={{ uri: `${API_URL}/tiles/${z}/${t.x}/${t.y}.png` }}
-          style={{ position: 'absolute', left: t.left, top: t.top, width: TILE, height: TILE }} fadeDuration={0} />
-      ))}
-      {MODE === 'dark' ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, backgroundColor: 'rgba(14,13,30,0.35)' }} /> : null}
+    <View style={{ width, height, borderRadius: radius, overflow: 'hidden', backgroundColor: MAP.land }}>
+      <Streets z={z} ox={ox} oy={oy} width={width} height={height} />
       <Svg width={width} height={height} style={{ position: 'absolute', left: 0, top: 0 }}>
-        {segments.filter((s) => s.length > 1).map((s, i) => (
-          <Polyline key={`c${i}`} points={s.map(px).join(' ')} fill="none" stroke="#ffffff" strokeOpacity={0.85} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
-        ))}
-        {segments.filter((s) => s.length > 1).map((s, i) => (
-          <Polyline key={`r${i}`} points={s.map(px).join(' ')} fill="none" stroke={C.accent} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-        ))}
-        {first ? <Circle {...at(first)} r={6} fill="#3DBE7A" stroke="#fff" strokeWidth={2} /> : null}
-        {last && !here ? <Circle {...at(last)} r={6} fill="#E2557B" stroke="#fff" strokeWidth={2} /> : null}
-        {here ? <Circle {...at(here)} r={12} fill={C.accent} fillOpacity={0.25} /> : null}
-        {here ? <Circle {...at(here)} r={6} fill={C.accent} stroke="#fff" strokeWidth={2} /> : null}
+        {lines.map((pts, i) => <Polyline key={`g${i}`} points={pts} fill="none" stroke={ROUTE_BLUE} strokeOpacity={0.22} strokeWidth={14} strokeLinecap="round" strokeLinejoin="round" />)}
+        {lines.map((pts, i) => <Polyline key={`c${i}`} points={pts} fill="none" stroke="#ffffff" strokeWidth={7.5} strokeLinecap="round" strokeLinejoin="round" />)}
+        {lines.map((pts, i) => <Polyline key={`r${i}`} points={pts} fill="none" stroke={ROUTE_BLUE} strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round" />)}
+        {first ? <Circle {...at(first)} r={6.5} fill="#2BB673" stroke="#fff" strokeWidth={2.5} /> : null}
+        {last && !here ? <Circle {...at(last)} r={6.5} fill="#1B2A4A" stroke="#fff" strokeWidth={2.5} /> : null}
+        {here ? <Circle {...at(here)} r={16} fill={ROUTE_BLUE} fillOpacity={0.18} /> : null}
+        {here ? <Circle {...at(here)} r={7.5} fill={ROUTE_BLUE} stroke="#fff" strokeWidth={3} /> : null}
       </Svg>
-      <Text style={{ position: 'absolute', right: 6, bottom: 4, fontSize: 9, color: '#333', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 3 }}>© OpenStreetMap contributors</Text>
+      <Text style={{ position: 'absolute', right: 6, bottom: 4, fontSize: 9, color: MAP.text }}>© OpenStreetMap</Text>
     </View>
+  );
+}
+
+/** The street map under the route, one tile at a time as each loads. */
+function Streets({ z, ox, oy, width, height }: { z: number; ox: number; oy: number; width: number; height: number }) {
+  const [, setLoaded] = useState(0);
+  const dz = Math.min(z, DATA_MAX_ZOOM);
+  const size = TILE * 2 ** (z - dz); // closer than the data zoom, each tile is drawn larger
+  const n = 2 ** dz;
+  const tiles: { x: number; y: number; left: number; top: number }[] = [];
+  for (let tx = Math.floor(ox / size); tx <= Math.floor((ox + width) / size); tx++) {
+    for (let ty = Math.floor(oy / size); ty <= Math.floor((oy + height) / size); ty++) {
+      if (ty < 0 || ty >= n) continue;
+      tiles.push({ x: ((tx % n) + n) % n, y: ty, left: tx * size - ox, top: ty * size - oy });
+    }
+  }
+  const want = tiles.map((t) => `${dz}/${t.x}/${t.y}`).join(',');
+  useEffect(() => {
+    let live = true;
+    for (const t of tiles) {
+      if (tileNow(dz, t.x, t.y)) continue;
+      loadTile(dz, t.x, t.y).then(() => { if (live) setLoaded((v) => v + 1); });
+    }
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [want]);
+
+  const k = size / TILE;
+  // Road widths stay the same on screen whatever the zoom; quieter streets fade out when zoomed far out.
+  const w = (px: number) => px / k;
+  const near = z >= 15;
+  const layers = (p: TilePaths) => (
+    <>
+      {p.green ? <Path d={p.green} fill={MAP.green} /> : null}
+      {p.water ? <Path d={p.water} fill={MAP.water} /> : null}
+      {p.waterLine ? <Path d={p.waterLine} fill="none" stroke={MAP.water} strokeWidth={w(2)} strokeLinecap="round" /> : null}
+      {p.building && z >= 15 ? <Path d={p.building} fill={MAP.building} /> : null}
+      {p.path && z >= 15 ? <Path d={p.path} fill="none" stroke={MAP.path} strokeWidth={w(1.4)} strokeDasharray={[w(3), w(2.5)]} strokeLinecap="round" /> : null}
+      {p.minor && z >= 13 ? <Path d={p.minor} fill="none" stroke={MAP.casing} strokeWidth={w(near ? 5 : 2.6)} strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {p.mid ? <Path d={p.mid} fill="none" stroke={MAP.casing} strokeWidth={w(near ? 7 : 4)} strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {p.major ? <Path d={p.major} fill="none" stroke={MAP.casing} strokeWidth={w(near ? 9 : 5.5)} strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {p.minor && z >= 13 ? <Path d={p.minor} fill="none" stroke={MAP.minor} strokeWidth={w(near ? 3.6 : 1.6)} strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {p.mid ? <Path d={p.mid} fill="none" stroke={MAP.mid} strokeWidth={w(near ? 5.4 : 2.8)} strokeLinecap="round" strokeLinejoin="round" /> : null}
+      {p.major ? <Path d={p.major} fill="none" stroke={MAP.major} strokeWidth={w(near ? 7 : 4)} strokeLinecap="round" strokeLinejoin="round" /> : null}
+    </>
+  );
+
+  return (
+    <>
+      {tiles.map((t) => (tileNow(dz, t.x, t.y) === 'failed' ? (
+        <Image key={`i${dz}/${t.x}/${t.y}/${t.left}`} source={{ uri: `${API_URL}/tiles/${dz}/${t.x}/${t.y}.png` }}
+          style={{ position: 'absolute', left: t.left, top: t.top, width: size, height: size, opacity: MODE === 'dark' ? 0.35 : 0.7 }} fadeDuration={0} />
+      ) : null))}
+      <Svg width={width} height={height} style={{ position: 'absolute', left: 0, top: 0 }}>
+        {tiles.map((t) => {
+          const p = tileNow(dz, t.x, t.y);
+          if (!p || p === 'failed') return null;
+          return <G key={`v${dz}/${t.x}/${t.y}/${t.left}`} transform={`translate(${t.left.toFixed(1)} ${t.top.toFixed(1)}) scale(${k})`}>{layers(p)}</G>;
+        })}
+      </Svg>
+    </>
   );
 }
 

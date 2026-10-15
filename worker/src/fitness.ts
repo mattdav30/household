@@ -350,6 +350,32 @@ async function summary(env: Env, u: User) {
 }
 
 export function registerFitness(app: App) {
+  // Vector map data for the GPS tracker from OpenFreeMap (free, no key), drawn in the app's own colours.
+  // The tile address changes when OpenFreeMap publishes new data, so it is read from their TileJSON.
+  app.get('/vtiles/:z/:x/:y', async (c) => {
+    const [z, x, y] = [c.req.param('z'), c.req.param('x'), c.req.param('y').replace(/\.pbf$/, '')].map(Number);
+    if (![z, x, y].every(Number.isInteger) || z < 0 || z > 14 || x < 0 || y < 0 || x >= 2 ** z || y >= 2 ** z) return bad('Bad tile.', 404);
+    const cache = caches.default;
+    const key = new Request(`https://vtiles.tandem.local/${z}/${x}/${y}.pbf`);
+    const hit = await cache.match(key);
+    if (hit) return hit;
+    const metaKey = new Request('https://vtiles.tandem.local/tilejson');
+    let meta = await cache.match(metaKey);
+    if (!meta) {
+      const m = await fetch('https://tiles.openfreemap.org/planet');
+      if (!m.ok) return new Response(null, { status: 502 });
+      meta = new Response(await m.text(), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' } });
+      c.executionCtx.waitUntil(cache.put(metaKey, meta.clone()));
+    }
+    const template = ((await meta.json()) as { tiles?: string[] }).tiles?.[0];
+    if (!template) return new Response(null, { status: 502 });
+    const res = await fetch(template.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)));
+    if (!res.ok) return new Response(null, { status: res.status === 404 ? 204 : 502 });
+    const out = new Response(await res.arrayBuffer(), { headers: { 'content-type': 'application/x-protobuf', 'cache-control': 'public, max-age=604800' } });
+    c.executionCtx.waitUntil(cache.put(key, out.clone()));
+    return out;
+  });
+
   // Map tiles for the GPS tracker, from OpenStreetMap, cached at Cloudflare's edge for a week so we
   // ask OpenStreetMap for each tile once at most, as their tile policy asks.
   app.get('/tiles/:z/:x/:y', async (c) => {
