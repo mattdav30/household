@@ -350,6 +350,24 @@ async function summary(env: Env, u: User) {
 }
 
 export function registerFitness(app: App) {
+  // Map tiles for the GPS tracker, from OpenStreetMap, cached at Cloudflare's edge for a week so we
+  // ask OpenStreetMap for each tile once at most, as their tile policy asks.
+  app.get('/tiles/:z/:x/:y', async (c) => {
+    const [z, x, y] = [c.req.param('z'), c.req.param('x'), c.req.param('y').replace(/\.png$/, '')].map(Number);
+    if (![z, x, y].every(Number.isInteger) || z < 0 || z > 19 || x < 0 || y < 0 || x >= 2 ** z || y >= 2 ** z) return bad('Bad tile.', 404);
+    const key = new Request(`https://tiles.tandem.local/${z}/${x}/${y}.png`);
+    const cache = caches.default;
+    const hit = await cache.match(key);
+    if (hit) return hit;
+    const res = await fetch(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`, {
+      headers: { 'User-Agent': 'Tandem/1.3 (private fitness app for two people; household-api.matthew-davenport30.workers.dev)' },
+    });
+    if (!res.ok) return new Response(null, { status: res.status });
+    const out = new Response(res.body, { headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=604800' } });
+    c.executionCtx.waitUntil(cache.put(key, out.clone()));
+    return out;
+  });
+
   // Over the air updates for Tandem, following the Expo Updates protocol (version 1).
   // The phone sends its runtime version; we answer with the newest build of the app's JavaScript
   // for that runtime, or 204 when it already runs it. Files are static assets next to the worker.

@@ -1,9 +1,10 @@
 // A map of a walk or run: map tiles under the route line, fitted to the route.
-// Tiles come from CARTO's free basemaps (OpenStreetMap data), so no map account or key is needed.
+// Tiles are OpenStreetMap's, passed through our worker, which caches them, so no map account or key is needed.
 import { Image, Text, View } from 'react-native';
 import Svg, { Circle, Polyline } from 'react-native-svg';
 import { C, MODE, S, tint } from '../lib/theme';
 import { fmtPace } from '../lib/gps';
+import { API_URL } from '../lib/api';
 import { styles as ui } from './ui';
 
 type LL = { lat: number; lng: number };
@@ -13,7 +14,6 @@ const worldY = (lat: number, z: number) => {
   const s = Math.sin((Math.max(-85, Math.min(85, lat)) * Math.PI) / 180);
   return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * TILE * 2 ** z;
 };
-const style = MODE === 'dark' ? 'dark_all' : 'rastertiles/voyager';
 
 /** Draws the route. Each inner array is one stretch between pauses. `here` marks where you are now. */
 export function RouteMap({ segments, width, height, here, radius = 16 }: { segments: LL[][]; width: number; height: number; here?: LL | null; radius?: number }) {
@@ -53,9 +53,10 @@ export function RouteMap({ segments, width, height, here, radius = 16 }: { segme
   return (
     <View style={{ width, height, borderRadius: radius, overflow: 'hidden', backgroundColor: MODE === 'dark' ? '#1b1d24' : '#e8e6df' }}>
       {tiles.map((t) => (
-        <Image key={`${z}/${t.x}/${t.y}/${t.left}`} source={{ uri: `https://basemaps.cartocdn.com/${style}/${z}/${t.x}/${t.y}@2x.png` }}
+        <Image key={`${z}/${t.x}/${t.y}/${t.left}`} source={{ uri: `${API_URL}/tiles/${z}/${t.x}/${t.y}.png` }}
           style={{ position: 'absolute', left: t.left, top: t.top, width: TILE, height: TILE }} fadeDuration={0} />
       ))}
+      {MODE === 'dark' ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, backgroundColor: 'rgba(14,13,30,0.35)' }} /> : null}
       <Svg width={width} height={height} style={{ position: 'absolute', left: 0, top: 0 }}>
         {segments.filter((s) => s.length > 1).map((s, i) => (
           <Polyline key={`c${i}`} points={s.map(px).join(' ')} fill="none" stroke="#ffffff" strokeOpacity={0.85} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
@@ -68,7 +69,7 @@ export function RouteMap({ segments, width, height, here, radius = 16 }: { segme
         {here ? <Circle {...at(here)} r={12} fill={C.accent} fillOpacity={0.25} /> : null}
         {here ? <Circle {...at(here)} r={6} fill={C.accent} stroke="#fff" strokeWidth={2} /> : null}
       </Svg>
-      <Text style={{ position: 'absolute', right: 6, bottom: 4, fontSize: 9, color: MODE === 'dark' ? '#9a9aa6' : '#555' }}>© OpenStreetMap © CARTO</Text>
+      <Text style={{ position: 'absolute', right: 6, bottom: 4, fontSize: 9, color: '#333', backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 3 }}>© OpenStreetMap contributors</Text>
     </View>
   );
 }
