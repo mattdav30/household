@@ -61,6 +61,7 @@ export function FetchGame({ visible, pet, onClose, onScore }: GameProps) {
   const caughtRef = useRef(0);
   const throwRef = useRef(0);
   const [barW, setBarW] = useState(useWindowDimensions().width - S.lg * 2);
+  const [stageH, setStageH] = useState(0);
   const zone = { from: 0.62, to: 0.8 };
 
   useEffect(() => {
@@ -116,8 +117,9 @@ export function FetchGame({ visible, pet, onClose, onScore }: GameProps) {
   return (
     <Modal visible={visible} animationType={reduceMotion() ? 'fade' : 'slide'} onRequestClose={onClose}>
       <Frame title="Fetch" sub={`Throw ${Math.min(throwN + 1, THROWS)} of ${THROWS} · ${caught} caught`} onClose={onClose}>
-        <View style={{ flex: 1, borderRadius: 20, overflow: 'hidden', backgroundColor: tint(C.green, 0.08), alignItems: 'center', justifyContent: 'center' }}>
-          {visible ? <Pet3D color={pet.color} mood="thrilled" stage={pet.stage} wearing={pet.wearing} size={barW} height={400} wide sleepy={false}
+        <View onLayout={(e: LayoutChangeEvent) => { const hh = Math.round(e.nativeEvent.layout.height); setStageH((v) => v || hh); }}
+          style={{ flex: 1, borderRadius: 20, overflow: 'hidden', backgroundColor: tint(C.green, 0.08), alignItems: 'center', justifyContent: 'center' }}>
+          {visible && stageH > 80 ? <Pet3D color={pet.color} mood="thrilled" stage={pet.stage} wearing={pet.wearing} size={barW} height={stageH} wide sleepy={false}
             fetchThrow={shot} onFetchDone={fetched} interactive={false} /> : null}
         </View>
         {done ? (
@@ -145,7 +147,19 @@ const DROP_ICON: Record<Drop['kind'], { icon: IconName; color: string; points: n
   bath: { icon: 'shower-head', color: '#8EC5FF', points: -2 },
 };
 const DROP = 36;
-const BOWL = 84;
+const BOWL = 96;
+const BOWL_H = 44;
+
+/** The dog's bowl, drawn with plain shapes so it sits exactly where catches count. */
+function Bowl({ color }: { color: string }) {
+  return (
+    <View style={{ width: BOWL, height: BOWL_H, alignItems: 'center' }}>
+      <View style={{ width: BOWL, height: 10, borderRadius: 5, backgroundColor: tint(color, 0.75) }} />
+      <View style={{ width: BOWL - 10, height: 28, marginTop: -2, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, backgroundColor: color }} />
+      <View style={{ width: BOWL - 40, height: 6, borderRadius: 3, backgroundColor: tint(color, 0.6) }} />
+    </View>
+  );
+}
 const CATCH_SECONDS = 30;
 
 /** Treat catch: slide the bowl to catch falling bones and balls, dodge bath time. Thirty seconds. */
@@ -202,11 +216,12 @@ export function CatchGame({ visible, pet, onClose, onScore }: GameProps) {
         const kind: Drop['kind'] = roll < 0.18 ? 'bath' : roll < 0.3 ? 'ball' : 'bone';
         s.drops.push({ id: s.nextId++, x: Math.random() * (w - DROP), y: -DROP, kind, speed: (h / 2.6) + elapsed * 6 + Math.random() * 60 });
       }
-      const bowlTop = h - BOWL * 0.85;
+      const bowlTop = h - BOWL_H - 6;
       let pts = 0;
       s.drops = s.drops.filter((d) => {
         d.y += d.speed * dt;
-        const hit = d.y + DROP >= bowlTop + 6 && d.y <= bowlTop + 30 && d.x + DROP - 6 > s.bowlX && d.x + 6 < s.bowlX + BOWL;
+        // Caught when the treat reaches the rim of the bowl, anywhere across its width.
+        const hit = d.y + DROP >= bowlTop + 4 && d.y + DROP <= bowlTop + BOWL_H && d.x + DROP - 8 > s.bowlX && d.x + 8 < s.bowlX + BOWL;
         if (hit) pts += DROP_ICON[d.kind].points;
         return !hit && d.y < h;
       });
@@ -239,13 +254,13 @@ export function CatchGame({ visible, pet, onClose, onScore }: GameProps) {
         ) : (
           <View onLayout={onLayout} style={{ flex: 1, borderRadius: 20, backgroundColor: tint(C.accent, 0.08), overflow: 'hidden' }} {...pan.panHandlers}>
             {s.drops.map((d) => (
-              <View key={d.id} pointerEvents="none" style={{ position: 'absolute', left: d.x, top: d.y }}>
-                <Icon name={DROP_ICON[d.kind].icon} size={DROP} color={DROP_ICON[d.kind].color} />
+              <View key={d.id} pointerEvents="none" style={{ position: 'absolute', left: d.x, top: d.y, width: DROP, height: DROP, alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
+                <Icon name={DROP_ICON[d.kind].icon} size={DROP - 4} color={DROP_ICON[d.kind].color} />
               </View>
             ))}
-            {s.flash ? <Text pointerEvents="none" style={{ position: 'absolute', left: s.bowlX + 24, top: h - BOWL - 50, color: s.flash.text.startsWith('+') ? C.green : C.danger, fontWeight: '800', fontSize: 24 }}>{s.flash.text}</Text> : null}
-            <View pointerEvents="none" style={{ position: 'absolute', left: s.bowlX, top: h - BOWL, width: BOWL, alignItems: 'center' }}>
-              <Icon name="bowl" size={BOWL} color={pet.color} />
+            {s.flash ? <Text pointerEvents="none" style={{ position: 'absolute', left: s.bowlX + 24, top: h - BOWL_H - 50, color: s.flash.text.startsWith('+') ? C.green : C.danger, fontWeight: '800', fontSize: 24 }}>{s.flash.text}</Text> : null}
+            <View pointerEvents="none" style={{ position: 'absolute', left: s.bowlX, top: h - BOWL_H - 6, width: BOWL, height: BOWL_H }}>
+              <Bowl color={pet.color} />
             </View>
             {state === 'ready' ? (
               <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: S.xl, gap: S.md }}>
@@ -305,6 +320,8 @@ export function FindGame({ visible, pet, onClose, onScore }: GameProps) {
     setBoneCup(b);
     setPhase('show');
     setMsg('The bone is under this one…');
+    await wait(60); // let the bone move under its cup before the cup lifts
+    if (!live()) return;
     await lift(b, true);
     await wait(800);
     if (!live()) return;
@@ -386,6 +403,7 @@ export function FindGame({ visible, pet, onClose, onScore }: GameProps) {
 export function BathGame({ visible, pet, care, onClose, onScore }: GameProps) {
   const { width } = useWindowDimensions();
   const [progress, setProgress] = useState(0);
+  const [stageH, setStageH] = useState(0);
   const [phase, setPhase] = useState<'scrub' | 'shake' | 'done'>('scrub');
   const [action, setAction] = useState<PetAction | null>(null);
   const dist = useRef(0);
@@ -432,8 +450,9 @@ export function BathGame({ visible, pet, care, onClose, onScore }: GameProps) {
   return (
     <Modal visible={visible} animationType={reduceMotion() ? 'fade' : 'slide'} onRequestClose={onClose}>
       <Frame title="Bath time" sub={phase === 'done' ? 'Squeaky clean' : 'Rub all over the dog to scrub'} onClose={onClose}>
-        <View style={{ flex: 1, borderRadius: 20, overflow: 'hidden', backgroundColor: tint('#8EC5FF', 0.14), alignItems: 'center', justifyContent: 'center' }} {...pan.panHandlers}>
-          {visible ? <Pet3D color={pet.color} mood={phase === 'done' ? 'thrilled' : 'okay'} stage={pet.stage} wearing={null} size={width - S.lg * 2} height={380} sleepy={false}
+        <View onLayout={(e: LayoutChangeEvent) => { const hh = Math.round(e.nativeEvent.layout.height); setStageH((v) => v || hh); }}
+          style={{ flex: 1, borderRadius: 20, overflow: 'hidden', backgroundColor: tint('#8EC5FF', 0.14), alignItems: 'center', justifyContent: 'center' }} {...pan.panHandlers}>
+          {visible && stageH > 80 ? <Pet3D color={pet.color} mood={phase === 'done' ? 'thrilled' : 'okay'} stage={pet.stage} wearing={null} size={width - S.lg * 2} height={stageH} sleepy={false}
             interactive={false} action={action} bubbles={foam} care={{ dirt, mess: 0, tired: false, sick: false, napping: false }} /> : null}
         </View>
         {phase === 'done' ? (
